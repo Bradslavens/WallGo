@@ -144,6 +144,7 @@
         if (lastMovedPiece && isAdjacentWall(lastMovedPiece, wall)) {
           wall.dataset.active = 'true';
           wall.classList.add('active-wall');
+          wall.dataset.player = players[currentPlayer].id; // Assign wall to current player
           wallMode = false;
           phase = 'move';
           placeWallBtn.disabled = true;

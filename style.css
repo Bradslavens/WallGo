@@ -41,6 +41,14 @@ body {
   font-weight: bold;
 }
 
+.wall[data-player="1"] {
+  background: #34ec0b !important; /* sienna for Player 1 */
+}
+
+.wall[data-player="2"] {
+  background: #e40b86 !important; /* darker brown for Player 2 */
+}
+
 .wall-vertical {
   width: 12px; /* 1/5 of 60px */
   height: 60px;
