@@ -119,9 +119,9 @@
         }
         updateStatus();
       } else if (phase === 'move' && !wallMode) {
-        // Select piece to move or move to a highlighted square
+        // Only allow selecting a piece if no piece has been selected yet this turn
         const piece = sq.querySelector('.piece');
-        if (piece && +piece.dataset.player === players[currentPlayer].id) {
+        if (piece && +piece.dataset.player === players[currentPlayer].id && !selectedPiece) {
           selectedPiece = { sq, piece };
           moveStep = 0;
           highlightMoves(sq);
