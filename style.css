@@ -90,11 +90,42 @@ body {
   margin: 0 0 0 30px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  align-items: flex-start;
+  gap: 30px;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
 }
 
 #gameStatus {
-  font-size: 1.2em;
+  font-size: 2em;
   font-weight: bold;
+  color: #7d4f13;
+  text-align: center;
+  margin-bottom: 10px;
+  text-shadow: 1px 1px 4px #fff2, 0 2px 8px #fff2;
+}
+
+#placeWallBtn {
+  font-size: 2em;
+  padding: 24px 48px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #f39c12 0%, #f7ca18 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 16px #f39c1244;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s, transform 0.1s;
+  margin: 0 auto;
+  display: block;
+}
+#placeWallBtn:disabled {
+  background: #b0b0b0;
+  color: #eee;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+#placeWallBtn:hover:enabled {
+  background: linear-gradient(90deg, #f7ca18 0%, #f39c12 100%);
+  transform: scale(1.05);
 }
