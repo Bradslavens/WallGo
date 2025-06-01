@@ -103,6 +103,10 @@ body {
   text-align: center;
   margin-bottom: 10px;
   text-shadow: 1px 1px 4px #fff2, 0 2px 8px #fff2;
+  width: 340px;
+  max-width: 90vw;
+  word-break: break-word;
+  white-space: normal;
 }
 
 #placeWallBtn {
