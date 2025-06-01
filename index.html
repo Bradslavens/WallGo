@@ -45,7 +45,6 @@
           // Square
           const sq = document.createElement('div');
           sq.className = 'square';
-          sq.textContent = `s${squareCount}`;
           sq.dataset.square = squareCount;
           sq.dataset.row = row;
           sq.dataset.col = col;
@@ -57,7 +56,6 @@
           // Vertical wall
           const wall = document.createElement('div');
           wall.className = 'wall wall-vertical';
-          wall.textContent = `w${wallCount}`;
           wall.dataset.wall = wallCount;
           wall.dataset.row = row;
           wall.dataset.col = col;
@@ -70,7 +68,6 @@
           // Horizontal wall
           const wall = document.createElement('div');
           wall.className = 'wall wall-horizontal';
-          wall.textContent = `w${wallCount}`;
           wall.dataset.wall = wallCount;
           wall.dataset.row = row;
           wall.dataset.col = col;
