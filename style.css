@@ -3,6 +3,11 @@ body {
   font-family: sans-serif;
 }
 
+.board-container {
+  display: flex;
+  align-items: flex-start;
+}
+
 .board {
   display: inline-block;
   margin: 40px;
@@ -16,7 +21,7 @@ body {
 .square {
   width: 60px;
   height: 60px;
-  background: #4a90e2;
+  background: #c2b280; /* light brown */
   color: #fff;
   display: flex;
   align-items: center;
@@ -27,8 +32,8 @@ body {
 }
 
 .wall {
-  background: #b0b0b0;
-  color: #333;
+  background: #5c4033; /* dark brown */
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,7 +54,7 @@ body {
 .intersection {
   width: 12px;
   height: 12px;
-  background: transparent;
+  background: #5c4033; /* dark brown */
 }
 
 .piece {
@@ -74,10 +79,11 @@ body {
 }
 
 .controls {
-  margin: 20px 0 10px 0;
+  margin: 0 0 0 30px;
   display: flex;
+  flex-direction: column;
   gap: 20px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 #gameStatus {
