@@ -34,6 +34,7 @@
     let lastMovedPiece = null;
     let wallMode = false;
     let winner = null;
+    let moveStep = 0;
 
     // Build board and track squares/walls
     for (let row = 0; row < size * 2 - 1; row++) {
@@ -96,6 +97,9 @@
         phase = 'wall';
         wallMode = true;
         placeWallBtn.disabled = true;
+        selectedPiece = null;
+        moveStep = 0;
+        clearHighlights();
         updateStatus();
       }
     });
@@ -115,19 +119,22 @@
         }
         updateStatus();
       } else if (phase === 'move' && !wallMode) {
-        // Select piece to move
+        // Select piece to move or move to a highlighted square
         const piece = sq.querySelector('.piece');
         if (piece && +piece.dataset.player === players[currentPlayer].id) {
           selectedPiece = { sq, piece };
+          moveStep = 0;
           highlightMoves(sq);
         } else if (selectedPiece && isValidMove(selectedPiece.sq, sq)) {
           movePiece(selectedPiece.sq, sq);
-          selectedPiece = null;
+          selectedPiece.sq = sq;
+          moveStep++;
           clearHighlights();
+          if (moveStep < 2) {
+            highlightMoves(sq);
+          }
           lastMovedPiece = sq;
-          wallMode = false;
           placeWallBtn.disabled = false;
-          updateStatus();
         }
       }
     }
@@ -167,55 +174,38 @@
     }
 
     function isValidMove(fromSq, toSq) {
-      // Only squares, not occupied, not through wall, not diagonal, 1 or 2 spaces, L-shape allowed
+      // Only squares, not occupied, not through wall, not diagonal, only 1 space up/down/left/right
       if (toSq.querySelector('.piece')) return false;
       const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
       const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
-      const dr = Math.abs(fr - tr), dc = Math.abs(fc - tc);
-      if ((dr === 0 && (dc === 4 || dc === 2)) || (dc === 0 && (dr === 4 || dr === 2)) || (dr === 2 && dc === 4) || (dr === 4 && dc === 2)) {
-        // Check for walls and pieces in path
+      const dr = tr - fr;
+      const dc = tc - fc;
+      // Only allow 1 space up, down, left, or right
+      if ((Math.abs(dr) === 2 && dc === 0) || (Math.abs(dc) === 2 && dr === 0)) {
+        // Check for wall in between
         return !isBlocked(fromSq, toSq);
       }
       return false;
     }
 
     function isBlocked(fromSq, toSq) {
-      // Check for walls or pieces in the path
+      // Check for wall in the path
       const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
       const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
-      // Only straight or L-shape
-      if (fr === tr) {
-        // Horizontal
-        const minC = Math.min(fc, tc);
-        const maxC = Math.max(fc, tc);
-        for (let c = minC + 2; c <= maxC; c += 2) {
-          const midSq = getSquare(fr, c);
-          if (midSq && midSq.querySelector('.piece')) return true;
-          const wallCol = c - 1;
-          const wall = getWall(fr, wallCol);
-          if (wall && wall.dataset.active === 'true') return true;
-        }
-      } else if (fc === tc) {
-        // Vertical
-        const minR = Math.min(fr, tr);
-        const maxR = Math.max(fr, tr);
-        for (let r = minR + 2; r <= maxR; r += 2) {
-          const midSq = getSquare(r, fc);
-          if (midSq && midSq.querySelector('.piece')) return true;
-          const wallRow = r - 1;
-          const wall = getWall(wallRow, fc);
-          if (wall && wall.dataset.active === 'true') return true;
-        }
-      } else {
-        // L-shape: must check both legs
-        // Try both legs
-        const leg1 = !isBlocked(fromSq, getSquare(fr, tc));
-        const leg2 = !isBlocked(getSquare(fr, tc), toSq);
-        const leg3 = !isBlocked(fromSq, getSquare(tr, fc));
-        const leg4 = !isBlocked(getSquare(tr, fc), toSq);
-        return !(leg1 && leg2) && !(leg3 && leg4);
-      }
-      return false;
+      const wallRow = (fr + tr) / 2;
+      const wallCol = (fc + tc) / 2;
+      const wall = getWall(wallRow, wallCol);
+      return wall && wall.dataset.active === 'true';
+    }
+
+    function placeWall(wall) {
+      wall.dataset.active = 'true';
+      wall.classList.add('active-wall');
+    }
+
+    function removeWall(wall) {
+      wall.dataset.active = 'false';
+      wall.classList.remove('active-wall');
     }
 
     function getSquare(row, col) {
