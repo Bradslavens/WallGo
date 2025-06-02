@@ -131,6 +131,7 @@ function onWallClick(wall) {
       placeWallBtn.disabled = true;
       currentPlayer = 1 - currentPlayer;
       updateStatus();
+      calculateAndLogAreas(); // Log areas each time a wall is placed
       checkGameEnd();
     }
   }
@@ -335,13 +336,46 @@ function calculateAndLogAreas() {
   // Log the results
   console.log(`${players[0].name} area:`, playerTotals[0]);
   console.log(`${players[1].name} area:`, playerTotals[1]);
-  // Log area details for debugging
   areaList.forEach((area, i) => {
     const playerNames = Array.from(area.players).map(pid => players[pid-1].name).join(', ');
     console.log(`Area ${i+1}: size=${area.squares.size}, players=[${playerNames}]`);
   });
+  // Show overlay if either area is less than total
+  const totalArea = size * size;
+  if (playerTotals[0] < totalArea || playerTotals[1] < totalArea) {
+    showEndOverlay(playerTotals);
+  }
 }
-updateStatus();
+
+function showEndOverlay(playerTotals) {
+  const endOverlay = document.getElementById('endOverlay');
+  const areaResults = document.getElementById('areaResults');
+  const totalArea = size * size;
+  let winnerText = '';
+  if (playerTotals[0] > playerTotals[1]) {
+    winnerText = `${players[0].name} wins!`;
+  } else if (playerTotals[1] > playerTotals[0]) {
+    winnerText = `${players[1].name} wins!`;
+  } else {
+    winnerText = "It's a tie!";
+  }
+  areaResults.innerHTML = `
+    <p>${players[0].name} area: <strong>${playerTotals[0]}</strong></p>
+    <p>${players[1].name} area: <strong>${playerTotals[1]}</strong></p>
+    <h3>${winnerText}</h3>
+  `;
+  endOverlay.style.display = 'flex';
+}
+
+function hideEndOverlay() {
+  const endOverlay = document.getElementById('endOverlay');
+  endOverlay.style.display = 'none';
+}
+
+// Attach restart logic
+if (document.getElementById('restartGameBtn')) {
+  document.getElementById('restartGameBtn').onclick = () => window.location.reload();
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('overlay');
@@ -360,3 +394,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+updateStatus();
