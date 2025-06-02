@@ -101,6 +101,16 @@ io.on('connection', (socket) => {
 function handleIntent(room, playerNum, action) {
   const state = rooms[room].state;
   const playerIdx = playerNum - 1;
+  if (action.type === 'requestWallPhase') {
+    if (state.phase === 'move' && state.currentPlayer === playerIdx) {
+      state.phase = 'wall';
+      state.wallMode = true; // <--- ensure wallMode is set
+      console.log(`[SERVER] Player ${playerNum} requested wall phase. Phase set to 'wall', wallMode set to true.`);
+    } else {
+      console.log(`[SERVER] REJECTED: requestWallPhase not allowed. phase: ${state.phase}, currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx}`);
+    }
+    return;
+  }
   if (state.phase === 'placement' && action.type === 'placePiece') {
     console.log(`[SERVER] handleIntent: Player ${playerNum} attempting to place piece at (${action.row},${action.col}) in phase '${state.phase}' (currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx})`);
     if (state.currentPlayer !== playerIdx) {

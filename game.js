@@ -75,10 +75,9 @@ const gameStatus = document.getElementById('gameStatus');
 placeWallBtn.addEventListener('click', () => {
   if (!isMyTurn()) return;
   if (phase === 'move') {
-    console.log('Place Wall button clicked. Entering wall mode.');
-    phase = 'wall';
-    wallMode = true;
-    placeWallBtn.disabled = true; // Disable until wall is placed
+    console.log('Place Wall button clicked. Requesting wall mode from server.');
+    sendIntent('requestWallPhase', {}); // Ask server to enter wall phase
+    placeWallBtn.disabled = true; // Optimistically disable until server responds
     selectedPiece = null;
     moveStep = 0;
     clearHighlights();
@@ -180,19 +179,15 @@ function renderFromState(state) {
   // Update turn/phase
   phase = state.phase;
   currentPlayer = state.currentPlayer;
+  wallMode = state.wallMode; // <-- sync wallMode from server
   if (typeof updateStatus === 'function') updateStatus();
 }
 
 function isMyTurn() {
   if (!latestState) return false;
-  if (latestState.waiting) return false; // <--- block all actions if waiting
-  if (latestState.phase === 'placement') {
-    return myPlayerNum === ((latestState.placedPieces % 2) + 1);
-  }
-  if (latestState.phase === 'move' || latestState.phase === 'wall') {
-    return myPlayerNum === (latestState.currentPlayer + 1);
-  }
-  return false;
+  if (latestState.waiting) return false;
+  // Use currentPlayer for ALL phases to match server logic
+  return myPlayerNum === (latestState.currentPlayer + 1);
 }
 
 // Patch UI event handlers to use server state
