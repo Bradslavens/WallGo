@@ -1,5 +1,5 @@
 const board = document.querySelector('.board');
-const size = 3;
+const size = 7;
 let squareCount = 1;
 let wallCount = 1;
 // Game state
