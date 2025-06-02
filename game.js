@@ -189,6 +189,8 @@ function onSquareClick(sq) {
   if (!isMyTurn()) return;
   const row = +sq.dataset.row, col = +sq.dataset.col;
   if (phase === 'placement') {
+    // Only allow placing a piece if the square is empty
+    if (sq.querySelector('.piece')) return;
     sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
     const piece = sq.querySelector('.piece');
@@ -202,6 +204,10 @@ function onSquareClick(sq) {
         toRow: row, toCol: col
       });
       moveStep++;
+      if (moveStep === 1) {
+        // Enable Place Wall button after first move
+        placeWallBtn.disabled = false;
+      }
       if (moveStep < 2) {
         // Allow a second move
         selectedPiece.sq = sq;
@@ -209,6 +215,7 @@ function onSquareClick(sq) {
       } else {
         selectedPiece = null;
         clearHighlights();
+        placeWallBtn.disabled = true;
       }
     }
   }
