@@ -223,7 +223,7 @@ function updateStatus() {
   }
 }
 function checkGameEnd() {
-  // End if no moves or all pieces enclosed
+  // End if no moves or all pieces are in fully enclosed areas (cannot increase area)
   let canMove = false;
   players.forEach(player => {
     player.pieces.forEach(sq => {
@@ -232,26 +232,72 @@ function checkGameEnd() {
       });
     });
   });
-  if (!canMove || allPiecesEnclosed()) {
-    phase = 'end';
-    calculateAndLogAreas();
-    updateStatus();
+  // If any piece can move, game is not over
+  if (canMove) return;
+
+  // Check if any wall placement could increase a player's area
+  let canIncreaseArea = false;
+  walls.forEach(wall => {
+    if (wall.dataset.active === 'false') {
+      // Simulate placing the wall for each player
+      wall.dataset.active = 'true';
+      players.forEach(player => {
+        const areaBefore = player.pieces.reduce((sum, sq) => sum + getFloodArea(sq), 0);
+        // Remove wall and recalculate
+        wall.dataset.active = 'false';
+        const areaAfter = player.pieces.reduce((sum, sq) => sum + getFloodArea(sq), 0);
+        wall.dataset.active = 'true'; // restore for next player
+        if (areaAfter > areaBefore) canIncreaseArea = true;
+      });
+      wall.dataset.active = 'false'; // restore
+    }
+  });
+  if (canIncreaseArea) return;
+
+  // If no moves and no wall placement can increase area, game ends
+  phase = 'end';
+  calculateAndLogAreas();
+  updateStatus();
+}
+
+function getFloodArea(sq) {
+  // Returns the size of the area reachable from sq (excluding other pieces)
+  const visited = new Set();
+  function flood(sq) {
+    const key = sq.dataset.square;
+    if (visited.has(key)) return;
+    visited.add(key);
+    const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
+    for (const [dr,dc] of dirs) {
+      const nr = +sq.dataset.row + dr;
+      const nc = +sq.dataset.col + dc;
+      const nextSq = getSquare(nr, nc);
+      if (nextSq && !isBlocked(sq, nextSq) && !nextSq.querySelector('.piece')) {
+        flood(nextSq);
+      }
+    }
+  }
+  flood(sq);
+  return visited.size;
+}
+
+function floodFillArea(sq, areaSquares, areaPlayers, visited) {
+  const key = sq.dataset.square;
+  if (visited.has(key)) return;
+  visited.add(key);
+  areaSquares.add(sq);
+  const piece = sq.querySelector('.piece');
+  if (piece) areaPlayers.add(+piece.dataset.player);
+  const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
+  for (const [dr,dc] of dirs) {
+    const nr = +sq.dataset.row + dr;
+    const nc = +sq.dataset.col + dc;
+    const nextSq = getSquare(nr, nc);
+    if (nextSq && !isBlocked(sq, nextSq)) {
+      floodFillArea(nextSq, areaSquares, areaPlayers, visited);
+    }
   }
 }
-
-function allPiecesEnclosed() {
-  // A piece is enclosed if it cannot move to any adjacent square (up/down/left/right)
-  return players.every(player =>
-    player.pieces.every(sq => {
-      const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
-      return dirs.every(([dr,dc]) => {
-        const neighbor = getSquare(+sq.dataset.row + dr, +sq.dataset.col + dc);
-        return !neighbor || neighbor.querySelector('.piece') || isBlocked(sq, neighbor);
-      });
-    })
-  );
-}
-
 function calculateAndLogAreas() {
   // Find all unique areas and which player's pieces are in them
   const visited = new Set();
@@ -289,24 +335,11 @@ function calculateAndLogAreas() {
   // Log the results
   console.log(`${players[0].name} area:`, playerTotals[0]);
   console.log(`${players[1].name} area:`, playerTotals[1]);
-}
-
-function floodFillArea(sq, areaSquares, areaPlayers, visited) {
-  const key = sq.dataset.square;
-  if (visited.has(key)) return;
-  visited.add(key);
-  areaSquares.add(sq);
-  const piece = sq.querySelector('.piece');
-  if (piece) areaPlayers.add(+piece.dataset.player);
-  const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
-  for (const [dr,dc] of dirs) {
-    const nr = +sq.dataset.row + dr;
-    const nc = +sq.dataset.col + dc;
-    const nextSq = getSquare(nr, nc);
-    if (nextSq && !isBlocked(sq, nextSq)) {
-      floodFillArea(nextSq, areaSquares, areaPlayers, visited);
-    }
-  }
+  // Log area details for debugging
+  areaList.forEach((area, i) => {
+    const playerNames = Array.from(area.players).map(pid => players[pid-1].name).join(', ');
+    console.log(`Area ${i+1}: size=${area.squares.size}, players=[${playerNames}]`);
+  });
 }
 updateStatus();
 
@@ -326,9 +359,4 @@ document.addEventListener('DOMContentLoaded', () => {
       updateStatus();
     });
   }
-  document.getElementById('endGameBtn').addEventListener('click', () => {
-    if (gamePhase !== 'end') {
-        endGame();
-    }
-  });
 });
