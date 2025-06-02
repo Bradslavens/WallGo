@@ -181,6 +181,9 @@ function renderFromState(state) {
   currentPlayer = state.currentPlayer;
   wallMode = state.wallMode; // <-- sync wallMode from server
   if (typeof updateStatus === 'function') updateStatus();
+  // Always clear selection and highlights after state update
+  selectedPiece = null;
+  clearHighlights();
 }
 
 function isMyTurn() {
