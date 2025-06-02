@@ -1,4 +1,3 @@
-// ...existing code...
 const board = document.querySelector('.board');
 const size = 7;
 let squareCount = 1;
@@ -272,4 +271,13 @@ function calculateWinner() {
   return 'Draw';
 }
 updateStatus();
-// ...existing code...
+
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('overlay');
+  const startGameBtn = document.getElementById('startGameBtn');
+  if (overlay && startGameBtn) {
+    startGameBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+  }
+});

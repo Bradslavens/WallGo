@@ -133,3 +133,48 @@ body {
   background: linear-gradient(90deg, #f7ca18 0%, #f39c12 100%);
   transform: scale(1.05);
 }
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(44, 38, 24, 0.92);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.overlay-content {
+  background: #fffbe8;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px #0005;
+  padding: 48px 36px 36px 36px;
+  max-width: 420px;
+  text-align: center;
+  color: #7d4f13;
+  font-size: 1.2em;
+}
+.overlay-content h2 {
+  margin-top: 0;
+  color: #f39c12;
+  font-size: 2.2em;
+}
+.overlay-content button {
+  margin-top: 24px;
+  font-size: 1.5em;
+  padding: 18px 40px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f39c12 0%, #f7ca18 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px #f39c1244;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s, transform 0.1s;
+}
+.overlay-content button:hover {
+  background: linear-gradient(90deg, #f7ca18 0%, #f39c12 100%);
+  transform: scale(1.05);
+}
