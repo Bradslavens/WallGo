@@ -209,13 +209,12 @@ function onSquareClick(sq) {
         placeWallBtn.disabled = false;
       }
       if (moveStep < 2) {
-        // Allow a second move
         selectedPiece.sq = sq;
         highlightMoves(sq);
       } else {
         selectedPiece = null;
         clearHighlights();
-        placeWallBtn.disabled = true;
+        // Do NOT disable placeWallBtn here; keep it enabled after second move
       }
     }
   }
