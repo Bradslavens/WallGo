@@ -100,6 +100,15 @@ function setupMultiplayer() {
       updatePlayerIndicator();
       updateStatus();
     });
+    socket.on('waitingForPlayer', () => {
+      gameStatus.textContent = 'Waiting for Player 2...';
+    });
+    socket.on('yourTurn', (msg) => {
+      gameStatus.textContent = msg;
+    });
+    socket.on('notYourTurn', (msg) => {
+      gameStatus.textContent = msg;
+    });
     socket.on('startGame', () => {
       updateStatus();
     });
