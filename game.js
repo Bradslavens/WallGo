@@ -189,8 +189,6 @@ function onSquareClick(sq) {
   if (!isMyTurn()) return;
   const row = +sq.dataset.row, col = +sq.dataset.col;
   if (phase === 'placement') {
-    // Only allow the player whose turn it is to place their piece
-    if (myPlayerNum !== ((latestState.placedPieces % 2) + 1)) return;
     sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
     // Only allow selecting/moving if it's your piece
