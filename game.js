@@ -98,7 +98,8 @@ function setupMultiplayer() {
     socket.on('playerNum', (num) => {
       myPlayerNum = num;
       updatePlayerIndicator();
-      updateStatus();
+      // Only call updateStatus if it is defined
+      if (typeof updateStatus === 'function') updateStatus();
     });
     socket.on('waitingForPlayer', () => {
       gameStatus.textContent = 'Waiting for Player 2...';
@@ -110,11 +111,12 @@ function setupMultiplayer() {
       gameStatus.textContent = msg;
     });
     socket.on('startGame', () => {
-      updateStatus();
+      if (typeof updateStatus === 'function') updateStatus();
     });
     socket.on('gameState', (state) => {
       latestState = state;
       renderFromState(state);
+      updatePlayerIndicator(); // <-- update indicator on every state change
     });
     socket.on('roomFull', () => {
       alert('Room is full. Only two players allowed.');
@@ -167,7 +169,7 @@ function renderFromState(state) {
   // Update turn/phase
   phase = state.phase;
   currentPlayer = state.currentPlayer;
-  updateStatus();
+  if (typeof updateStatus === 'function') updateStatus();
 }
 
 function isMyTurn() {
@@ -213,6 +215,22 @@ function onWallClick(wall) {
   }
 }
 
+function updatePlayerIndicator() {
+  const indicator = document.getElementById('playerIndicator');
+  if (!indicator) return;
+  // Use latestState if available for correct player mapping
+  let playerNum = myPlayerNum;
+  // Use playerNum as 1 or 2, but only if it is 1 or 2
+  if (playerNum === 1 || playerNum === 2) {
+    // Use static color and name mapping
+    const color = playerNum === 1 ? '#e74c3c' : '#27ae60';
+    const name = playerNum === 1 ? 'Player 1' : 'Player 2';
+    indicator.innerHTML = `You are <span style="color:${color}; font-weight:bold;">${name}</span>`;
+  } else {
+    indicator.textContent = '';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const overlay = document.getElementById('overlay');
   const startGameBtn = document.getElementById('startGameBtn');
@@ -223,5 +241,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   setupMultiplayer();
-  updateStatus();
+  if (typeof updateStatus === 'function') updateStatus();
 });

@@ -45,11 +45,13 @@ io.on('connection', (socket) => {
     roomObj.sockets.push(socket);
     socket.join(room);
     const playerNum = roomObj.sockets.length;
+    console.log(`Player ${playerNum} joined room '${room}'.`); // Log player join
     socket.emit('playerNum', playerNum);
     // Notify waiting if only one player
     if (roomObj.sockets.length === 1) {
       roomObj.state.waiting = true;
       socket.emit('waitingForPlayer');
+      console.log('Waiting for Player 2...');
     }
     if (roomObj.sockets.length === 2) {
       roomObj.state.waiting = false;
@@ -59,6 +61,8 @@ io.on('connection', (socket) => {
       const current = roomObj.state.currentPlayer;
       roomObj.sockets[current].emit('yourTurn', roomObj.state.players[current].name + "'s turn");
       roomObj.sockets[1-current].emit('notYourTurn', roomObj.state.players[current].name + "'s turn");
+      console.log('Both players joined. Game started.');
+      console.log(`It is ${roomObj.state.players[current].name}'s turn.`);
     }
     // Send state on join
     socket.emit('gameState', roomObj.state);
@@ -73,6 +77,7 @@ io.on('connection', (socket) => {
         if (roomObj.sockets.length === 2) {
           roomObj.sockets[current].emit('yourTurn', state.players[current].name + "'s turn");
           roomObj.sockets[1-current].emit('notYourTurn', state.players[current].name + "'s turn");
+          console.log(`It is now ${state.players[current].name}'s turn.`);
         }
       }
     });
@@ -82,6 +87,7 @@ io.on('connection', (socket) => {
       // Optionally reset game if a player leaves
       roomObj.state = createInitialState();
       broadcastState(room);
+      console.log('A player disconnected. Game reset.');
     });
   });
 });
