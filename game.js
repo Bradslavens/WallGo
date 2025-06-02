@@ -73,6 +73,7 @@ for (let row = 0; row < size * 2 - 1; row++) {
 const placeWallBtn = document.getElementById('placeWallBtn');
 const gameStatus = document.getElementById('gameStatus');
 placeWallBtn.addEventListener('click', () => {
+  if (!isMyTurn()) return;
   if (phase === 'move') {
     phase = 'wall';
     wallMode = true;
@@ -84,297 +85,123 @@ placeWallBtn.addEventListener('click', () => {
   }
 });
 
-function onSquareClick(sq) {
-  if (phase === 'placement') {
-    if (sq.querySelector('.piece')) return;
-    const player = players[currentPlayer];
-    if (player.pieces.length >= 2) return;
-    placePiece(sq, player);
-    placedPieces++;
-    if (placedPieces < 4) {
-      currentPlayer = 1 - currentPlayer;
-    } else {
-      phase = 'move';
-      currentPlayer = Math.floor(Math.random() * 2); // Random start for moves
+let socket, myPlayerNum;
+let latestState = null;
+
+function setupMultiplayer() {
+  // Load Socket.IO client script
+  const script = document.createElement('script');
+  script.src = '/socket.io/socket.io.js';
+  script.onload = () => {
+    socket = io();
+    socket.emit('joinRoom', 'default');
+    socket.on('playerNum', (num) => {
+      myPlayerNum = num;
+      updatePlayerIndicator();
+      updateStatus();
+    });
+    socket.on('startGame', () => {
+      updateStatus();
+    });
+    socket.on('gameState', (state) => {
+      latestState = state;
+      renderFromState(state);
+    });
+    socket.on('roomFull', () => {
+      alert('Room is full. Only two players allowed.');
+    });
+  };
+  document.head.appendChild(script);
+}
+
+function sendIntent(type, data) {
+  if (socket && typeof myPlayerNum === 'number') {
+    socket.emit('intent', { type, ...data });
+  }
+}
+
+function renderFromState(state) {
+  // Clear board
+  squares.forEach(sq => {
+    while (sq.firstChild) sq.removeChild(sq.firstChild);
+  });
+  walls.forEach(wall => {
+    wall.dataset.active = 'false';
+    wall.classList.remove('active-wall');
+    wall.dataset.player = '';
+  });
+  // Render pieces and walls
+  for (let row = 0; row < state.board.length; row++) {
+    for (let col = 0; col < state.board[row].length; col++) {
+      const cell = state.board[row][col];
+      if (!cell) continue;
+      if (cell.type === 'piece') {
+        const sq = getSquare(row, col);
+        if (sq) {
+          const player = state.players[cell.player - 1];
+          const piece = document.createElement('div');
+          piece.className = 'piece';
+          piece.style.background = player.color;
+          piece.dataset.player = player.id;
+          sq.appendChild(piece);
+        }
+      } else if (cell.type === 'wall') {
+        const wall = getWall(row, col);
+        if (wall) {
+          wall.dataset.active = 'true';
+          wall.classList.add('active-wall');
+          wall.dataset.player = cell.player;
+        }
+      }
     }
-    updateStatus();
+  }
+  // Update turn/phase
+  phase = state.phase;
+  currentPlayer = state.currentPlayer;
+  updateStatus();
+}
+
+function isMyTurn() {
+  if (!latestState) return false;
+  if (latestState.phase === 'placement') {
+    return myPlayerNum === ((latestState.placedPieces % 2) + 1);
+  }
+  if (latestState.phase === 'move' || latestState.phase === 'wall') {
+    return myPlayerNum === (latestState.currentPlayer + 1);
+  }
+  return false;
+}
+
+// Patch UI event handlers to use server state
+function onSquareClick(sq) {
+  if (!isMyTurn()) return;
+  const row = +sq.dataset.row, col = +sq.dataset.col;
+  if (phase === 'placement') {
+    sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
-    // Only allow selecting a piece if no piece has been selected yet this turn
+    // Only allow selecting/moving if it's your piece
     const piece = sq.querySelector('.piece');
-    if (piece && +piece.dataset.player === players[currentPlayer].id && !selectedPiece) {
+    if (piece && +piece.dataset.player === myPlayerNum && !selectedPiece) {
       selectedPiece = { sq, piece };
       moveStep = 0;
       highlightMoves(sq);
     } else if (selectedPiece && isValidMove(selectedPiece.sq, sq)) {
-      movePiece(selectedPiece.sq, sq);
-      selectedPiece.sq = sq;
-      moveStep++;
+      sendIntent('movePiece', {
+        fromRow: +selectedPiece.sq.dataset.row, fromCol: +selectedPiece.sq.dataset.col,
+        toRow: row, toCol: col
+      });
+      selectedPiece = null;
       clearHighlights();
-      if (moveStep < 2) {
-        highlightMoves(sq);
-      }
-      lastMovedPiece = sq;
-      placeWallBtn.disabled = false;
     }
   }
 }
 
 function onWallClick(wall) {
+  if (!isMyTurn()) return;
   if (phase === 'wall' && wallMode && wall.dataset.active === 'false') {
-    // Only allow adjacent to last moved piece
-    if (lastMovedPiece && isAdjacentWall(lastMovedPiece, wall)) {
-      wall.dataset.active = 'true';
-      wall.classList.add('active-wall');
-      wall.dataset.player = players[currentPlayer].id; // Assign wall to current player
-      wallMode = false;
-      phase = 'move';
-      placeWallBtn.disabled = true;
-      currentPlayer = 1 - currentPlayer;
-      updateStatus();
-      calculateAndLogAreas(); // Log areas each time a wall is placed
-      checkGameEnd();
-    }
+    const row = +wall.dataset.row, col = +wall.dataset.col;
+    sendIntent('placeWall', { row, col });
   }
-}
-
-function placePiece(sq, player) {
-  const piece = document.createElement('div');
-  piece.className = 'piece';
-  piece.style.background = player.color;
-  piece.dataset.player = player.id;
-  sq.appendChild(piece);
-  player.pieces.push(sq);
-}
-
-function movePiece(fromSq, toSq) {
-  const piece = fromSq.querySelector('.piece');
-  if (!piece) return;
-  toSq.appendChild(piece);
-  // Update player's piece reference
-  const player = players[currentPlayer];
-  player.pieces = player.pieces.map(s => (s === fromSq ? toSq : s));
-}
-
-function isValidMove(fromSq, toSq) {
-  // Only squares, not occupied, not through wall, not diagonal, only 1 space up/down/left/right
-  if (toSq.querySelector('.piece')) return false;
-  const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
-  const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
-  const dr = tr - fr;
-  const dc = tc - fc;
-  // Only allow 1 space up, down, left, or right
-  if ((Math.abs(dr) === 2 && dc === 0) || (Math.abs(dc) === 2 && dr === 0)) {
-    // Check for wall in between
-    return !isBlocked(fromSq, toSq);
-  }
-  return false;
-}
-
-function isBlocked(fromSq, toSq) {
-  // Check for wall in the path
-  const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
-  const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
-  const wallRow = (fr + tr) / 2;
-  const wallCol = (fc + tc) / 2;
-  const wall = getWall(wallRow, wallCol);
-  return wall && wall.dataset.active === 'true';
-}
-
-function placeWall(wall) {
-  wall.dataset.active = 'true';
-  wall.classList.add('active-wall');
-}
-
-function removeWall(wall) {
-  wall.dataset.active = 'false';
-  wall.classList.remove('active-wall');
-}
-
-function getSquare(row, col) {
-  return squares.find(sq => +sq.dataset.row === row && +sq.dataset.col === col);
-}
-function getWall(row, col) {
-  return walls.find(w => +w.dataset.row === row && +w.dataset.col === col);
-}
-function isAdjacentWall(sq, wall) {
-  const sr = +sq.dataset.row, sc = +sq.dataset.col;
-  const wr = +wall.dataset.row, wc = +wall.dataset.col;
-  return (Math.abs(sr - wr) + Math.abs(sc - wc)) === 1;
-}
-function highlightMoves(sq) {
-  clearHighlights();
-  squares.forEach(target => {
-    if (isValidMove(sq, target)) {
-      target.classList.add('highlight');
-    }
-  });
-}
-function clearHighlights() {
-  squares.forEach(sq => sq.classList.remove('highlight'));
-}
-function updateStatus() {
-  if (phase === 'placement') {
-    gameStatus.textContent = `${players[currentPlayer].name}'s turn to place a piece.`;
-  } else if (phase === 'move') {
-    gameStatus.textContent = `${players[currentPlayer].name}'s turn to move.`;
-  } else if (phase === 'wall') {
-    gameStatus.textContent = `${players[currentPlayer].name}: Place a wall adjacent to your piece.`;
-  } else if (phase === 'end') {
-    gameStatus.textContent = winner ? `${winner} wins!` : 'Game over!';
-  }
-}
-function checkGameEnd() {
-  // End if no moves or all pieces are in fully enclosed areas (cannot increase area)
-  let canMove = false;
-  players.forEach(player => {
-    player.pieces.forEach(sq => {
-      squares.forEach(target => {
-        if (isValidMove(sq, target)) canMove = true;
-      });
-    });
-  });
-  // If any piece can move, game is not over
-  if (canMove) return;
-
-  // Check if any wall placement could increase a player's area
-  let canIncreaseArea = false;
-  walls.forEach(wall => {
-    if (wall.dataset.active === 'false') {
-      // Simulate placing the wall for each player
-      wall.dataset.active = 'true';
-      players.forEach(player => {
-        const areaBefore = player.pieces.reduce((sum, sq) => sum + getFloodArea(sq), 0);
-        // Remove wall and recalculate
-        wall.dataset.active = 'false';
-        const areaAfter = player.pieces.reduce((sum, sq) => sum + getFloodArea(sq), 0);
-        wall.dataset.active = 'true'; // restore for next player
-        if (areaAfter > areaBefore) canIncreaseArea = true;
-      });
-      wall.dataset.active = 'false'; // restore
-    }
-  });
-  if (canIncreaseArea) return;
-
-  // If no moves and no wall placement can increase area, game ends
-  phase = 'end';
-  calculateAndLogAreas();
-  updateStatus();
-}
-
-function getFloodArea(sq) {
-  // Returns the size of the area reachable from sq (excluding other pieces)
-  const visited = new Set();
-  function flood(sq) {
-    const key = sq.dataset.square;
-    if (visited.has(key)) return;
-    visited.add(key);
-    const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
-    for (const [dr,dc] of dirs) {
-      const nr = +sq.dataset.row + dr;
-      const nc = +sq.dataset.col + dc;
-      const nextSq = getSquare(nr, nc);
-      if (nextSq && !isBlocked(sq, nextSq) && !nextSq.querySelector('.piece')) {
-        flood(nextSq);
-      }
-    }
-  }
-  flood(sq);
-  return visited.size;
-}
-
-function floodFillArea(sq, areaSquares, areaPlayers, visited) {
-  const key = sq.dataset.square;
-  if (visited.has(key)) return;
-  visited.add(key);
-  areaSquares.add(sq);
-  const piece = sq.querySelector('.piece');
-  if (piece) areaPlayers.add(+piece.dataset.player);
-  const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
-  for (const [dr,dc] of dirs) {
-    const nr = +sq.dataset.row + dr;
-    const nc = +sq.dataset.col + dc;
-    const nextSq = getSquare(nr, nc);
-    if (nextSq && !isBlocked(sq, nextSq)) {
-      floodFillArea(nextSq, areaSquares, areaPlayers, visited);
-    }
-  }
-}
-function calculateAndLogAreas() {
-  // Find all unique areas and which player's pieces are in them
-  const visited = new Set();
-  const areaList = [];
-  squares.forEach(sq => {
-    if (!visited.has(sq.dataset.square) && !sq.querySelector('.piece')) {
-      const areaSquares = new Set();
-      const areaPlayers = new Set();
-      floodFillArea(sq, areaSquares, areaPlayers, visited);
-      if (areaPlayers.size > 0) {
-        areaList.push({ squares: areaSquares, players: areaPlayers });
-      }
-    }
-  });
-  // Also check for areas containing pieces
-  players.forEach(player => {
-    player.pieces.forEach(sq => {
-      if (!visited.has(sq.dataset.square)) {
-        const areaSquares = new Set();
-        const areaPlayers = new Set();
-        floodFillArea(sq, areaSquares, areaPlayers, visited);
-        if (areaPlayers.size > 0) {
-          areaList.push({ squares: areaSquares, players: areaPlayers });
-        }
-      }
-    });
-  });
-  // Calculate totals for each player
-  const playerTotals = [0, 0];
-  areaList.forEach(area => {
-    area.players.forEach(pid => {
-      playerTotals[pid-1] += area.squares.size;
-    });
-  });
-  // Log the results
-  console.log(`${players[0].name} area:`, playerTotals[0]);
-  console.log(`${players[1].name} area:`, playerTotals[1]);
-  areaList.forEach((area, i) => {
-    const playerNames = Array.from(area.players).map(pid => players[pid-1].name).join(', ');
-    console.log(`Area ${i+1}: size=${area.squares.size}, players=[${playerNames}]`);
-  });
-  // Show overlay if either area is less than total
-  const totalArea = size * size;
-  if (playerTotals[0] < totalArea || playerTotals[1] < totalArea) {
-    showEndOverlay(playerTotals);
-  }
-}
-
-function showEndOverlay(playerTotals) {
-  const endOverlay = document.getElementById('endOverlay');
-  const areaResults = document.getElementById('areaResults');
-  const totalArea = size * size;
-  let winnerText = '';
-  if (playerTotals[0] > playerTotals[1]) {
-    winnerText = `${players[0].name} wins!`;
-  } else if (playerTotals[1] > playerTotals[0]) {
-    winnerText = `${players[1].name} wins!`;
-  } else {
-    winnerText = "It's a tie!";
-  }
-  areaResults.innerHTML = `
-    <p>${players[0].name} area: <strong>${playerTotals[0]}</strong></p>
-    <p>${players[1].name} area: <strong>${playerTotals[1]}</strong></p>
-    <h3>${winnerText}</h3>
-  `;
-  endOverlay.style.display = 'flex';
-}
-
-function hideEndOverlay() {
-  const endOverlay = document.getElementById('endOverlay');
-  endOverlay.style.display = 'none';
-}
-
-// Attach restart logic
-if (document.getElementById('restartGameBtn')) {
-  document.getElementById('restartGameBtn').onclick = () => window.location.reload();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -383,139 +210,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (overlay && startGameBtn) {
     startGameBtn.addEventListener('click', () => {
       overlay.style.display = 'none';
+      // Optionally, could trigger multiplayer join here, but joinRoom is already called on script load
     });
   }
-  const endGameBtn = document.getElementById('endGameBtn');
-  if (endGameBtn) {
-    endGameBtn.addEventListener('click', () => {
-      phase = 'end';
-      calculateAndLogAreas();
-      updateStatus();
-    });
-  }
-  // Also update indicator on load in case multiplayer is not ready yet
-  if (typeof updatePlayerIndicator === 'function') updatePlayerIndicator();
+  setupMultiplayer();
+  updateStatus();
 });
-// --- Multiplayer: Socket.IO ---
-// Add this to the top of your file (after DOMContentLoaded if needed)
-let socket, myPlayerNum;
-
-function setupMultiplayer() {
-  // Load Socket.IO client script
-  const script = document.createElement('script');
-  script.src = '/socket.io/socket.io.js';
-  script.onload = () => {
-    socket = io();
-    socket.emit('joinRoom', 'default'); // Always join the default room
-    socket.on('playerNum', (num) => {
-      myPlayerNum = num;
-      // Set player colors/names if you want
-      if (num === 1) {
-        currentPlayer = 0;
-      } else {
-        currentPlayer = 1;
-      }
-      updatePlayerIndicator();
-      updateStatus();
-    });
-    socket.on('startGame', () => {
-      // Optionally show a message that both players are connected
-      updateStatus();
-    });
-    socket.on('gameAction', handleRemoteAction);
-  };
-  document.head.appendChild(script);
-}
-
-// Call this at the end of DOMContentLoaded
-setupMultiplayer();
-// Ensure indicator is cleared at start
-updatePlayerIndicator && updatePlayerIndicator();
-
-// --- Multiplayer action relaying ---
-function sendAction(type, data) {
-  if (socket && typeof myPlayerNum === 'number') {
-    socket.emit('gameAction', { type, data: { ...data, playerId: myPlayerNum } });
-  }
-}
-
-function handleRemoteAction(action) {
-  const { type, data } = action;
-  if (type === 'placePiece') {
-    const sq = getSquare(data.row, data.col);
-    const player = players[data.playerId - 1];
-    origPlacePiece.call(this, sq, player);
-    placedPieces++;
-    phase = placedPieces < 4 ? 'placement' : 'move';
-    updateStatus();
-  } else if (type === 'movePiece') {
-    const fromSq = getSquare(data.fromRow, data.fromCol);
-    const toSq = getSquare(data.toRow, data.toCol);
-    origMovePiece.call(this, fromSq, toSq, data.playerId);
-    lastMovedPiece = toSq;
-    placeWallBtn.disabled = false;
-    updateStatus();
-  } else if (type === 'placeWall') {
-    const wall = getWall(data.row, data.col);
-    wall.dataset.active = 'true';
-    wall.classList.add('active-wall');
-    wall.dataset.player = data.playerId;
-    wallMode = false;
-    phase = 'move';
-    placeWallBtn.disabled = true;
-    currentPlayer = (data.playerId % 2); // 1->0, 2->1
-    updateStatus();
-    calculateAndLogAreas();
-    checkGameEnd();
-  }
-}
-
-// Patch placePiece
-const origPlacePiece = placePiece;
-placePiece = function(sq, player) {
-  if (player === players[currentPlayer] && myPlayerNum) {
-    sendAction('placePiece', { row: +sq.dataset.row, col: +sq.dataset.col });
-  }
-  origPlacePiece.apply(this, arguments);
-};
-
-// Patch movePiece
-const origMovePiece = movePiece;
-movePiece = function(fromSq, toSq, playerId) {
-  // Only send if this is the local player's move
-  if (myPlayerNum && fromSq.querySelector('.piece') && +fromSq.querySelector('.piece').dataset.player === players[currentPlayer].id && !playerId) {
-    sendAction('movePiece', {
-      fromRow: +fromSq.dataset.row, fromCol: +fromSq.dataset.col,
-      toRow: +toSq.dataset.row, toCol: +toSq.dataset.col
-    });
-  }
-  // If playerId is provided (remote), update the correct player's pieces
-  if (playerId) {
-    const player = players[playerId - 1];
-    const piece = fromSq.querySelector('.piece');
-    if (!piece) return;
-    toSq.appendChild(piece);
-    player.pieces = player.pieces.map(s => (s === fromSq ? toSq : s));
-  } else {
-    origMovePiece.apply(this, arguments);
-  }
-};
-
-// Patch onWallClick
-const origOnWallClick = onWallClick;
-onWallClick = function(wall) {
-  if (phase === 'wall' && wallMode && wall.dataset.active === 'false' && myPlayerNum) {
-    sendAction('placeWall', { row: +wall.dataset.row, col: +wall.dataset.col });
-  }
-  origOnWallClick.apply(this, arguments);
-};
-
-function updatePlayerIndicator() {
-  const indicator = document.getElementById('playerIndicator');
-  if (!indicator) return;
-  if (typeof myPlayerNum === 'number') {
-    indicator.innerHTML = `You are <span style="color:${players[myPlayerNum-1].color}; font-weight:bold;">${players[myPlayerNum-1].name}</span>`;
-  } else {
-    indicator.textContent = '';
-  }
-}
