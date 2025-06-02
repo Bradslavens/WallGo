@@ -191,7 +191,6 @@ function onSquareClick(sq) {
   if (phase === 'placement') {
     sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
-    // Only allow selecting/moving if it's your piece
     const piece = sq.querySelector('.piece');
     if (piece && +piece.dataset.player === myPlayerNum && !selectedPiece) {
       selectedPiece = { sq, piece };
@@ -202,8 +201,15 @@ function onSquareClick(sq) {
         fromRow: +selectedPiece.sq.dataset.row, fromCol: +selectedPiece.sq.dataset.col,
         toRow: row, toCol: col
       });
-      selectedPiece = null;
-      clearHighlights();
+      moveStep++;
+      if (moveStep < 2) {
+        // Allow a second move
+        selectedPiece.sq = sq;
+        highlightMoves(sq);
+      } else {
+        selectedPiece = null;
+        clearHighlights();
+      }
     }
   }
 }
