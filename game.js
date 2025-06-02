@@ -189,6 +189,8 @@ function onSquareClick(sq) {
   if (!isMyTurn()) return;
   const row = +sq.dataset.row, col = +sq.dataset.col;
   if (phase === 'placement') {
+    // Only allow the player whose turn it is to place their piece
+    if (myPlayerNum !== ((latestState.placedPieces % 2) + 1)) return;
     sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
     // Only allow selecting/moving if it's your piece
@@ -230,6 +232,53 @@ function updatePlayerIndicator() {
   } else {
     indicator.textContent = '';
   }
+}
+
+function getSquare(row, col) {
+  return squares.find(sq => +sq.dataset.row === row && +sq.dataset.col === col);
+}
+
+function highlightMoves(sq) {
+  // Highlight valid moves for the selected piece
+  squares.forEach(target => {
+    target.classList.remove('highlight');
+    if (isValidMove(sq, target)) {
+      target.classList.add('highlight');
+    }
+  });
+}
+
+function clearHighlights() {
+  squares.forEach(sq => sq.classList.remove('highlight'));
+}
+
+function isValidMove(fromSq, toSq) {
+  // Only squares, not occupied, not through wall, not diagonal, only 1 space up/down/left/right
+  if (toSq.querySelector('.piece')) return false;
+  const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
+  const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
+  const dr = tr - fr;
+  const dc = tc - fc;
+  // Only allow 1 space up, down, left, or right
+  if ((Math.abs(dr) === 2 && dc === 0) || (Math.abs(dc) === 2 && dr === 0)) {
+    // Check for wall in between
+    return !isBlocked(fromSq, toSq);
+  }
+  return false;
+}
+
+function isBlocked(fromSq, toSq) {
+  // Check for wall in the path
+  const fr = +fromSq.dataset.row, fc = +fromSq.dataset.col;
+  const tr = +toSq.dataset.row, tc = +toSq.dataset.col;
+  const wallRow = (fr + tr) / 2;
+  const wallCol = (fc + tc) / 2;
+  const wall = getWall(wallRow, wallCol);
+  return wall && wall.dataset.active === 'true';
+}
+
+function getWall(row, col) {
+  return walls.find(w => +w.dataset.row === row && +w.dataset.col === col);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
