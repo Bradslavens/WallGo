@@ -134,6 +134,26 @@ body {
   transform: scale(1.05);
 }
 
+#endGameBtn {
+  font-size: 1.2em;
+  padding: 16px 36px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #e74c3c 0%, #f7ca18 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 8px #e74c3c44;
+  cursor: pointer;
+  font-weight: bold;
+  margin: 0 auto;
+  display: block;
+  margin-top: 10px;
+  transition: background 0.2s, transform 0.1s;
+}
+#endGameBtn:hover {
+  background: linear-gradient(90deg, #f7ca18 0%, #e74c3c 100%);
+  transform: scale(1.05);
+}
+
 .overlay {
   position: fixed;
   top: 0;

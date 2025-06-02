@@ -1,5 +1,5 @@
 const board = document.querySelector('.board');
-const size = 7;
+const size = 3;
 let squareCount = 1;
 let wallCount = 1;
 // Game state
@@ -224,7 +224,6 @@ function updateStatus() {
 }
 function checkGameEnd() {
   // End if no moves or all pieces enclosed
-  // For simplicity, just check if any player can move
   let canMove = false;
   players.forEach(player => {
     player.pieces.forEach(sq => {
@@ -233,42 +232,81 @@ function checkGameEnd() {
       });
     });
   });
-  if (!canMove) {
+  if (!canMove || allPiecesEnclosed()) {
     phase = 'end';
-    winner = calculateWinner();
+    calculateAndLogAreas();
     updateStatus();
   }
 }
-function calculateWinner() {
-  // For now, just count accessible area for each piece
-  function floodFill(sq, visited) {
-    const key = sq.dataset.square;
-    if (visited.has(key)) return 0;
-    visited.add(key);
-    let area = 1;
-    const dirs = [
-      [0, 2], [0, -2], [2, 0], [-2, 0]
-    ];
-    for (const [dr, dc] of dirs) {
-      const nr = +sq.dataset.row + dr;
-      const nc = +sq.dataset.col + dc;
-      const nextSq = getSquare(nr, nc);
-      if (nextSq && !nextSq.querySelector('.piece')) {
-        // Check wall between
-        const wall = getWall((+sq.dataset.row + nr) / 2, (+sq.dataset.col + nc) / 2);
-        if (wall && wall.dataset.active === 'false') {
-          area += floodFill(nextSq, visited);
-        }
+
+function allPiecesEnclosed() {
+  // A piece is enclosed if it cannot move to any adjacent square (up/down/left/right)
+  return players.every(player =>
+    player.pieces.every(sq => {
+      const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
+      return dirs.every(([dr,dc]) => {
+        const neighbor = getSquare(+sq.dataset.row + dr, +sq.dataset.col + dc);
+        return !neighbor || neighbor.querySelector('.piece') || isBlocked(sq, neighbor);
+      });
+    })
+  );
+}
+
+function calculateAndLogAreas() {
+  // Find all unique areas and which player's pieces are in them
+  const visited = new Set();
+  const areaList = [];
+  squares.forEach(sq => {
+    if (!visited.has(sq.dataset.square) && !sq.querySelector('.piece')) {
+      const areaSquares = new Set();
+      const areaPlayers = new Set();
+      floodFillArea(sq, areaSquares, areaPlayers, visited);
+      if (areaPlayers.size > 0) {
+        areaList.push({ squares: areaSquares, players: areaPlayers });
       }
     }
-    return area;
+  });
+  // Also check for areas containing pieces
+  players.forEach(player => {
+    player.pieces.forEach(sq => {
+      if (!visited.has(sq.dataset.square)) {
+        const areaSquares = new Set();
+        const areaPlayers = new Set();
+        floodFillArea(sq, areaSquares, areaPlayers, visited);
+        if (areaPlayers.size > 0) {
+          areaList.push({ squares: areaSquares, players: areaPlayers });
+        }
+      }
+    });
+  });
+  // Calculate totals for each player
+  const playerTotals = [0, 0];
+  areaList.forEach(area => {
+    area.players.forEach(pid => {
+      playerTotals[pid-1] += area.squares.size;
+    });
+  });
+  // Log the results
+  console.log(`${players[0].name} area:`, playerTotals[0]);
+  console.log(`${players[1].name} area:`, playerTotals[1]);
+}
+
+function floodFillArea(sq, areaSquares, areaPlayers, visited) {
+  const key = sq.dataset.square;
+  if (visited.has(key)) return;
+  visited.add(key);
+  areaSquares.add(sq);
+  const piece = sq.querySelector('.piece');
+  if (piece) areaPlayers.add(+piece.dataset.player);
+  const dirs = [ [0,2], [0,-2], [2,0], [-2,0] ];
+  for (const [dr,dc] of dirs) {
+    const nr = +sq.dataset.row + dr;
+    const nc = +sq.dataset.col + dc;
+    const nextSq = getSquare(nr, nc);
+    if (nextSq && !isBlocked(sq, nextSq)) {
+      floodFillArea(nextSq, areaSquares, areaPlayers, visited);
+    }
   }
-  const areas = players.map(player =>
-    player.pieces.reduce((sum, sq) => sum + floodFill(sq, new Set()), 0)
-  );
-  if (areas[0] > areas[1]) return players[0].name;
-  if (areas[1] > areas[0]) return players[1].name;
-  return 'Draw';
 }
 updateStatus();
 
@@ -280,4 +318,17 @@ document.addEventListener('DOMContentLoaded', () => {
       overlay.style.display = 'none';
     });
   }
+  const endGameBtn = document.getElementById('endGameBtn');
+  if (endGameBtn) {
+    endGameBtn.addEventListener('click', () => {
+      phase = 'end';
+      calculateAndLogAreas();
+      updateStatus();
+    });
+  }
+  document.getElementById('endGameBtn').addEventListener('click', () => {
+    if (gamePhase !== 'end') {
+        endGame();
+    }
+  });
 });
