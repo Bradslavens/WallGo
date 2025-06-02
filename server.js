@@ -45,16 +45,18 @@ io.on('connection', (socket) => {
     roomObj.sockets.push(socket);
     socket.join(room);
     const playerNum = roomObj.sockets.length;
-    console.log(`Player ${playerNum} joined room '${room}'.`); // Log player join
     socket.emit('playerNum', playerNum);
+    console.log(`[SERVER] Player ${playerNum} joined room '${room}'.`);
     // Notify waiting if only one player
     if (roomObj.sockets.length === 1) {
       roomObj.state.waiting = true;
+      roomObj.state.phase = 'waiting'; // <--- set phase to waiting
       socket.emit('waitingForPlayer');
       console.log('Waiting for Player 2...');
     }
     if (roomObj.sockets.length === 2) {
       roomObj.state.waiting = false;
+      roomObj.state.phase = 'placement'; // <--- set phase to placement
       io.to(room).emit('startGame');
       broadcastState(room);
       // Notify both players whose turn it is
@@ -68,6 +70,10 @@ io.on('connection', (socket) => {
     socket.emit('gameState', roomObj.state);
 
     socket.on('intent', (action) => {
+      console.log(`[SERVER] Received intent from Player ${playerNum}:`, action);
+      if (action.type === 'placePiece') {
+        console.log(`[SERVER] DEBUG: placePiece intent received for (${action.row},${action.col})`);
+      }
       handleIntent(room, playerNum, action);
       broadcastState(room);
       // After every action, notify whose turn it is
@@ -96,13 +102,24 @@ function handleIntent(room, playerNum, action) {
   const state = rooms[room].state;
   const playerIdx = playerNum - 1;
   if (state.phase === 'placement' && action.type === 'placePiece') {
-    if (state.currentPlayer !== playerIdx) return;
-    if (state.players[playerIdx].pieces.length >= 2) return;
+    console.log(`[SERVER] handleIntent: Player ${playerNum} attempting to place piece at (${action.row},${action.col}) in phase '${state.phase}' (currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx})`);
+    if (state.currentPlayer !== playerIdx) {
+      console.log(`[SERVER] REJECTED: Not this player's turn.`);
+      return;
+    }
+    if (state.players[playerIdx].pieces.length >= 2) {
+      console.log(`[SERVER] REJECTED: Player ${playerNum} already has 2 pieces.`);
+      return;
+    }
     const { row, col } = action;
-    if (state.board[row][col]) return;
+    if (state.board[row][col]) {
+      console.log(`[SERVER] REJECTED: Square (${row},${col}) is already occupied.`);
+      return;
+    }
     state.board[row][col] = { type: 'piece', player: playerNum };
     state.players[playerIdx].pieces.push({ row, col });
     state.placedPieces++;
+    console.log(`[SERVER] SUCCESS: Player ${playerNum} placed piece at (${row},${col}). placedPieces: ${state.placedPieces}`);
     if (state.placedPieces < 4) {
       state.currentPlayer = 1 - state.currentPlayer;
     } else {
@@ -110,6 +127,7 @@ function handleIntent(room, playerNum, action) {
       state.currentPlayer = Math.floor(Math.random() * 2);
     }
   } else if (state.phase === 'move' && action.type === 'movePiece') {
+    console.log(`[SERVER] Player ${playerNum} intent: movePiece from (${action.fromRow},${action.fromCol}) to (${action.toRow},${action.toCol})`);
     if (state.currentPlayer !== playerIdx) return;
     // Validate move (1 or 2 spaces, not through wall, not occupied)
     // ... (implement move validation here, see client for logic) ...
@@ -129,14 +147,21 @@ function handleIntent(room, playerNum, action) {
       state.moveStep = 0;
     }
   } else if (state.phase === 'wall' && action.type === 'placeWall') {
-    if (state.currentPlayer !== playerIdx) return;
+    console.log(`[SERVER] Player ${playerNum} intent: placeWall at (${action.row},${action.col})`);
+    if (state.currentPlayer !== playerIdx) {
+      console.log(`[SERVER] REJECTED: Not this player's turn for wall placement.`);
+      return;
+    }
     const { row, col } = action;
-    if (state.board[row][col]) return;
+    if (state.board[row][col]) {
+      console.log(`[SERVER] REJECTED: Wall already exists at (${row},${col}).`);
+      return;
+    }
     state.board[row][col] = { type: 'wall', player: playerNum };
     state.wallMode = false;
     state.phase = 'move';
     state.currentPlayer = 1 - state.currentPlayer;
-    // TODO: area calculation, checkGameEnd, etc.
+    console.log(`[SERVER] SUCCESS: Player ${playerNum} placed wall at (${row},${col}). Next turn: Player ${state.currentPlayer + 1}`);
   }
   // TODO: area calculation, checkGameEnd, winner
 }
