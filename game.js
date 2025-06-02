@@ -393,5 +393,129 @@ document.addEventListener('DOMContentLoaded', () => {
       updateStatus();
     });
   }
+  // Also update indicator on load in case multiplayer is not ready yet
+  if (typeof updatePlayerIndicator === 'function') updatePlayerIndicator();
 });
-updateStatus();
+// --- Multiplayer: Socket.IO ---
+// Add this to the top of your file (after DOMContentLoaded if needed)
+let socket, myPlayerNum;
+
+function setupMultiplayer() {
+  // Load Socket.IO client script
+  const script = document.createElement('script');
+  script.src = '/socket.io/socket.io.js';
+  script.onload = () => {
+    socket = io();
+    socket.emit('joinRoom', 'default'); // Always join the default room
+    socket.on('playerNum', (num) => {
+      myPlayerNum = num;
+      // Set player colors/names if you want
+      if (num === 1) {
+        currentPlayer = 0;
+      } else {
+        currentPlayer = 1;
+      }
+      updatePlayerIndicator();
+      updateStatus();
+    });
+    socket.on('startGame', () => {
+      // Optionally show a message that both players are connected
+      updateStatus();
+    });
+    socket.on('gameAction', handleRemoteAction);
+  };
+  document.head.appendChild(script);
+}
+
+// Call this at the end of DOMContentLoaded
+setupMultiplayer();
+// Ensure indicator is cleared at start
+updatePlayerIndicator && updatePlayerIndicator();
+
+// --- Multiplayer action relaying ---
+function sendAction(type, data) {
+  if (socket && typeof myPlayerNum === 'number') {
+    socket.emit('gameAction', { type, data: { ...data, playerId: myPlayerNum } });
+  }
+}
+
+function handleRemoteAction(action) {
+  const { type, data } = action;
+  if (type === 'placePiece') {
+    const sq = getSquare(data.row, data.col);
+    const player = players[data.playerId - 1];
+    origPlacePiece.call(this, sq, player);
+    placedPieces++;
+    phase = placedPieces < 4 ? 'placement' : 'move';
+    updateStatus();
+  } else if (type === 'movePiece') {
+    const fromSq = getSquare(data.fromRow, data.fromCol);
+    const toSq = getSquare(data.toRow, data.toCol);
+    origMovePiece.call(this, fromSq, toSq, data.playerId);
+    lastMovedPiece = toSq;
+    placeWallBtn.disabled = false;
+    updateStatus();
+  } else if (type === 'placeWall') {
+    const wall = getWall(data.row, data.col);
+    wall.dataset.active = 'true';
+    wall.classList.add('active-wall');
+    wall.dataset.player = data.playerId;
+    wallMode = false;
+    phase = 'move';
+    placeWallBtn.disabled = true;
+    currentPlayer = (data.playerId % 2); // 1->0, 2->1
+    updateStatus();
+    calculateAndLogAreas();
+    checkGameEnd();
+  }
+}
+
+// Patch placePiece
+const origPlacePiece = placePiece;
+placePiece = function(sq, player) {
+  if (player === players[currentPlayer] && myPlayerNum) {
+    sendAction('placePiece', { row: +sq.dataset.row, col: +sq.dataset.col });
+  }
+  origPlacePiece.apply(this, arguments);
+};
+
+// Patch movePiece
+const origMovePiece = movePiece;
+movePiece = function(fromSq, toSq, playerId) {
+  // Only send if this is the local player's move
+  if (myPlayerNum && fromSq.querySelector('.piece') && +fromSq.querySelector('.piece').dataset.player === players[currentPlayer].id && !playerId) {
+    sendAction('movePiece', {
+      fromRow: +fromSq.dataset.row, fromCol: +fromSq.dataset.col,
+      toRow: +toSq.dataset.row, toCol: +toSq.dataset.col
+    });
+  }
+  // If playerId is provided (remote), update the correct player's pieces
+  if (playerId) {
+    const player = players[playerId - 1];
+    const piece = fromSq.querySelector('.piece');
+    if (!piece) return;
+    toSq.appendChild(piece);
+    player.pieces = player.pieces.map(s => (s === fromSq ? toSq : s));
+  } else {
+    origMovePiece.apply(this, arguments);
+  }
+};
+
+// Patch onWallClick
+const origOnWallClick = onWallClick;
+onWallClick = function(wall) {
+  if (phase === 'wall' && wallMode && wall.dataset.active === 'false' && myPlayerNum) {
+    sendAction('placeWall', { row: +wall.dataset.row, col: +wall.dataset.col });
+  }
+  origOnWallClick.apply(this, arguments);
+};
+
+function updatePlayerIndicator() {
+  const indicator = document.getElementById('playerIndicator');
+  if (!indicator) return;
+  if (typeof myPlayerNum === 'number') {
+    indicator.innerHTML = `You are <span style="color:${players[myPlayerNum-1].color}; font-weight:bold;">${players[myPlayerNum-1].name}</span>`;
+  } else {
+    indicator.textContent = '';
+  }
+}
