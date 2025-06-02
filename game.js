@@ -102,7 +102,8 @@ function setupMultiplayer() {
       if (typeof updateStatus === 'function') updateStatus();
     });
     socket.on('waitingForPlayer', () => {
-      gameStatus.textContent = 'Waiting for Player 2...';
+      if (gameStatus) gameStatus.textContent = 'Waiting for Player 2...';
+      if (typeof updateStatus === 'function') updateStatus();
     });
     socket.on('yourTurn', (msg) => {
       gameStatus.textContent = msg;
@@ -237,9 +238,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (overlay && startGameBtn) {
     startGameBtn.addEventListener('click', () => {
       overlay.style.display = 'none';
-      // Optionally, could trigger multiplayer join here, but joinRoom is already called on script load
+      setupMultiplayer(); // Only join multiplayer after clicking Join
     });
   }
-  setupMultiplayer();
+  // Remove auto-call to setupMultiplayer here
   if (typeof updateStatus === 'function') updateStatus();
 });
