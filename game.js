@@ -13,11 +13,11 @@ let currentPlayer = Math.floor(Math.random() * 2); // Random start
 let phase = 'placement'; // 'placement', 'move', 'wall', 'end'
 let placedPieces = 0;
 let selectedPiece = null;
-let moveCount = 0;
-let lastMovedPiece = null;
+let moveStep = 0;
+let lockedPiece = null; // { player: number, pieceId: number }
 let wallMode = false;
 let winner = null;
-let moveStep = 0;
+let lockedPieceCoords = null; // {row, col} of the piece being moved this turn
 
 // Build board and track squares/walls
 for (let row = 0; row < size * 2 - 1; row++) {
@@ -156,10 +156,13 @@ function renderFromState(state) {
           // Always clear and re-add the piece for server-authoritative state
           while (sq.firstChild) sq.removeChild(sq.firstChild);
           const player = state.players[cell.player - 1];
+          let pieceIdx = player.pieces.findIndex(p => p.row === row && p.col === col);
+          if (pieceIdx === -1) pieceIdx = 0;
           const piece = document.createElement('div');
           piece.className = 'piece';
           piece.style.background = player.color;
           piece.dataset.player = player.id;
+          piece.dataset.pieceId = pieceIdx; // assign unique id
           sq.appendChild(piece);
         }
       } else if (cell.type === 'wall') {
@@ -179,9 +182,10 @@ function renderFromState(state) {
   // Update turn/phase
   phase = state.phase;
   currentPlayer = state.currentPlayer;
-  wallMode = state.wallMode; // <-- sync wallMode from server
+  wallMode = state.wallMode;
+  // Use lockedPiece from server state
+  lockedPiece = state.lockedPiece || null;
   if (typeof updateStatus === 'function') updateStatus();
-  // Always clear selection and highlights after state update
   selectedPiece = null;
   clearHighlights();
 }
@@ -195,60 +199,32 @@ function isMyTurn() {
 
 // Patch UI event handlers to use server state
 function onSquareClick(sq) {
-  console.log('[CLIENT] onSquareClick called for', sq.dataset.row, sq.dataset.col, 'phase:', phase, 'isMyTurn:', isMyTurn(), 'myPlayerNum:', myPlayerNum);
-  if (!isMyTurn()) {
-    console.log('[CLIENT] onSquareClick: Not my turn or waiting. Returning.');
-    return;
-  }
+  const piece = sq.querySelector('.piece');
   const row = +sq.dataset.row, col = +sq.dataset.col;
+  if (!isMyTurn()) return;
   if (phase === 'placement') {
-    if (sq.querySelector('.piece')) {
-      console.log('[CLIENT] onSquareClick: Tried to place piece, but square is occupied:', row, col);
-      return;
-    }
-    console.log('[CLIENT] Attempting to place piece at', row, col, 'phase:', phase, 'myPlayerNum:', myPlayerNum, 'isMyTurn:', isMyTurn());
+    if (sq.querySelector('.piece')) return;
     sendIntent('placePiece', { row, col });
   } else if (phase === 'move' && !wallMode) {
-    const piece = sq.querySelector('.piece');
     if (piece && +piece.dataset.player === myPlayerNum && !selectedPiece) {
       selectedPiece = { sq, piece };
-      moveStep = 0;
       highlightMoves(sq);
     } else if (selectedPiece && isValidMove(selectedPiece.sq, sq)) {
       sendIntent('movePiece', {
         fromRow: +selectedPiece.sq.dataset.row, fromCol: +selectedPiece.sq.dataset.col,
         toRow: row, toCol: col
       });
-      moveStep++;
-      if (moveStep === 1) {
-        // Enable Place Wall button after first move
-        placeWallBtn.disabled = false;
-      }
-      if (moveStep < 2) {
-        selectedPiece.sq = sq;
-        highlightMoves(sq);
-      } else {
-        selectedPiece = null;
-        clearHighlights();
-        // Do NOT disable placeWallBtn here; keep it enabled after second move
-      }
+      selectedPiece = null;
+      clearHighlights();
     }
-  } else {
-    console.log('[CLIENT] onSquareClick: Ignored. phase:', phase, 'wallMode:', wallMode);
   }
 }
 
 function onWallClick(wall) {
   if (!isMyTurn()) return;
-  // Fix: Only allow wall placement if phase === 'wall' and wallMode === true
   if (phase === 'wall' && wallMode && wall.dataset.active === 'false') {
-    console.log('Wall clicked:', wall.dataset.row, wall.dataset.col);
     const row = +wall.dataset.row, col = +wall.dataset.col;
     sendIntent('placeWall', { row, col });
-    // Do not optimistically update UI or phase here; wait for server state
-  } else {
-    // Add more detailed logging for debugging
-    console.log('Wall click ignored. phase:', phase, 'wallMode:', wallMode, 'active:', wall.dataset.active, 'Expected: phase === "wall" && wallMode === true && wall.dataset.active === "false"');
   }
 }
 
@@ -273,17 +249,19 @@ function getSquare(row, col) {
 }
 
 function highlightMoves(sq) {
-  // Highlight valid moves for the selected piece
-  squares.forEach(target => {
-    target.classList.remove('highlight');
-    if (isValidMove(sq, target)) {
-      target.classList.add('highlight');
-    }
-  });
+  // Optionally highlight all squares, but do not enforce rules here
+  squares.forEach(target => target.classList.remove('highlight'));
 }
 
 function clearHighlights() {
-  squares.forEach(sq => sq.classList.remove('highlight'));
+  squares.forEach(sq => {
+    sq.classList.remove('highlight');
+    const piece = sq.querySelector('.piece');
+    if (piece) {
+      piece.style.pointerEvents = '';
+      piece.style.opacity = '';
+    }
+  });
 }
 
 function isValidMove(fromSq, toSq) {

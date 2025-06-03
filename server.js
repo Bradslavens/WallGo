@@ -24,7 +24,8 @@ function createInitialState() {
     wallMode: false,
     moveStep: 0,
     winner: null,
-    waiting: true // <--- add waiting flag
+    waiting: true,
+    lockedPiece: null // Track which piece is locked for this turn
   };
 }
 
@@ -98,20 +99,68 @@ io.on('connection', (socket) => {
   });
 });
 
+function isValidMove(state, playerNum, fromRow, fromCol, toRow, toCol) {
+  // Only squares (even, even)
+  if (toRow % 2 !== 0 || toCol % 2 !== 0) return false;
+  // No moving onto another piece
+  if (state.board[toRow][toCol]) return false;
+  // Must move 1 or 2 spaces, not diagonal, but L-shape allowed
+  const dr = Math.abs(toRow - fromRow);
+  const dc = Math.abs(toCol - fromCol);
+  if (!((dr === 2 && dc === 0) || (dr === 0 && dc === 2) || (dr === 2 && dc === 2))) return false;
+  // No moving through walls
+  if (dr === 2 && dc === 0) {
+    // Vertical move
+    const wallRow = (fromRow + toRow) / 2;
+    const wallCol = fromCol;
+    if (state.board[wallRow][wallCol] && state.board[wallRow][wallCol].type === 'wall') return false;
+    if (dr === 2 && dc === 2) {
+      // L-shape: check both segments
+      const midRow = fromRow;
+      const midCol = toCol;
+      if (!isValidMove(state, playerNum, fromRow, fromCol, midRow, midCol)) return false;
+      if (!isValidMove(state, playerNum, midRow, midCol, toRow, toCol)) return false;
+    }
+  } else if (dr === 0 && dc === 2) {
+    // Horizontal move
+    const wallRow = fromRow;
+    const wallCol = (fromCol + toCol) / 2;
+    if (state.board[wallRow][wallCol] && state.board[wallRow][wallCol].type === 'wall') return false;
+    if (dr === 2 && dc === 2) {
+      // L-shape: check both segments
+      const midRow = toRow;
+      const midCol = fromCol;
+      if (!isValidMove(state, playerNum, fromRow, fromCol, midRow, midCol)) return false;
+      if (!isValidMove(state, playerNum, midRow, midCol, toRow, toCol)) return false;
+    }
+  } else if (dr === 2 && dc === 2) {
+    // L-shape: check both segments
+    const mid1 = { row: fromRow, col: toCol };
+    const mid2 = { row: toRow, col: fromCol };
+    if (!isValidMove(state, playerNum, fromRow, fromCol, mid1.row, mid1.col)) return false;
+    if (!isValidMove(state, playerNum, mid1.row, mid1.col, toRow, toCol)) return false;
+    if (!isValidMove(state, playerNum, fromRow, fromCol, mid2.row, mid2.col)) return false;
+    if (!isValidMove(state, playerNum, mid2.row, mid2.col, toRow, toCol)) return false;
+  }
+  return true;
+}
+
+function isValidWallPlacement(state, playerNum, row, col) {
+  // Must be a wall space (odd, even or even, odd)
+  if (!((row % 2 === 1 && col % 2 === 0) || (row % 2 === 0 && col % 2 === 1))) return false;
+  // Must be adjacent to the last moved piece
+  const last = state.lastMovedPiece;
+  if (!last) return false;
+  if (Math.abs(last.row - row) + Math.abs(last.col - col) !== 1) return false;
+  // Must be inactive
+  if (state.board[row][col]) return false;
+  return true;
+}
+
 function handleIntent(room, playerNum, action) {
   const state = rooms[room].state;
   const playerIdx = playerNum - 1;
-  if (action.type === 'requestWallPhase') {
-    if (state.phase === 'move' && state.currentPlayer === playerIdx) {
-      state.phase = 'wall';
-      state.wallMode = true; // <--- ensure wallMode is set
-      console.log(`[SERVER] Player ${playerNum} requested wall phase. Phase set to 'wall', wallMode set to true.`);
-    } else {
-      console.log(`[SERVER] REJECTED: requestWallPhase not allowed. phase: ${state.phase}, currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx}`);
-    }
-    return;
-  }
-  if (state.phase === 'placement' && action.type === 'placePiece') {
+  if (action.type === 'placePiece') {
     console.log(`[SERVER] handleIntent: Player ${playerNum} attempting to place piece at (${action.row},${action.col}) in phase '${state.phase}' (currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx})`);
     if (state.currentPlayer !== playerIdx) {
       console.log(`[SERVER] REJECTED: Not this player's turn.`);
@@ -139,13 +188,24 @@ function handleIntent(room, playerNum, action) {
   } else if (state.phase === 'move' && action.type === 'movePiece') {
     console.log(`[SERVER] Player ${playerNum} intent: movePiece from (${action.fromRow},${action.fromCol}) to (${action.toRow},${action.toCol})`);
     if (state.currentPlayer !== playerIdx) return;
-    // Validate move (1 or 2 spaces, not through wall, not occupied)
-    // ... (implement move validation here, see client for logic) ...
-    // For now, just move
+    // Find which piece is being moved (by index in player's pieces array)
+    let pieceIdx = state.players[playerIdx].pieces.findIndex(p => p.row === action.fromRow && p.col === action.fromCol);
+    if (pieceIdx === -1) pieceIdx = 0;
+    // If this is the first move of the turn, set lockedPiece
+    if (!state.lockedPiece) {
+      state.lockedPiece = { player: playerNum, pieceId: pieceIdx };
+    } else {
+      // Only allow moving the locked piece
+      if (state.lockedPiece.player !== playerNum || pieceIdx !== state.lockedPiece.pieceId) {
+        console.log(`[SERVER] REJECTED: Only the locked piece can be moved this turn. lockedPiece:`, state.lockedPiece, 'attempted:', pieceIdx);
+        return;
+      }
+    }
+    // Only allow moving your own piece, 1 or 2 spaces, L-shape, not through walls/pieces
     const { fromRow, fromCol, toRow, toCol } = action;
     const piece = state.board[fromRow][fromCol];
     if (!piece || piece.type !== 'piece' || piece.player !== playerNum) return;
-    if (state.board[toRow][toCol]) return;
+    if (!isValidMove(state, playerNum, fromRow, fromCol, toRow, toCol)) return;
     state.board[fromRow][fromCol] = null;
     state.board[toRow][toCol] = { type: 'piece', player: playerNum };
     state.players[playerIdx].pieces = state.players[playerIdx].pieces.map(p => (p.row === fromRow && p.col === fromCol) ? { row: toRow, col: toCol } : p);
@@ -155,6 +215,7 @@ function handleIntent(room, playerNum, action) {
       state.phase = 'wall';
       state.wallMode = true;
       state.moveStep = 0;
+      state.lockedPiece = null; // Reset lock for next turn
     }
   } else if (state.phase === 'wall' && action.type === 'placeWall') {
     console.log(`[SERVER] Player ${playerNum} intent: placeWall at (${action.row},${action.col})`);
@@ -171,6 +232,7 @@ function handleIntent(room, playerNum, action) {
     state.wallMode = false;
     state.phase = 'move';
     state.currentPlayer = 1 - state.currentPlayer;
+    state.lockedPiece = null; // Reset lock for next turn
     console.log(`[SERVER] SUCCESS: Player ${playerNum} placed wall at (${row},${col}). Next turn: Player ${state.currentPlayer + 1}`);
   }
   // TODO: area calculation, checkGameEnd, winner
