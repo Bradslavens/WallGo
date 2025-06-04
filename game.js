@@ -183,6 +183,12 @@ function renderFromState(state) {
   phase = state.phase;
   currentPlayer = state.currentPlayer;
   wallMode = state.wallMode;
+  // Enable Place Wall button after the first move of a turn (moveStep > 0 and phase is 'move' and it's your turn)
+  if (phase === 'move' && state.moveStep > 0 && isMyTurn()) {
+    placeWallBtn.disabled = false;
+  } else {
+    placeWallBtn.disabled = true;
+  }
   // Use lockedPiece from server state
   lockedPiece = state.lockedPiece || null;
   if (typeof updateStatus === 'function') updateStatus();

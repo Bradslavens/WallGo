@@ -160,6 +160,19 @@ function isValidWallPlacement(state, playerNum, row, col) {
 function handleIntent(room, playerNum, action) {
   const state = rooms[room].state;
   const playerIdx = playerNum - 1;
+  if (action.type === 'requestWallPhase') {
+    // Only allow entering wall mode if phase is 'move', moveStep > 0, and it's the current player's turn
+    if (state.phase === 'move' && state.currentPlayer === playerIdx && state.moveStep > 0) {
+      state.phase = 'wall';
+      state.wallMode = true;
+      state.moveStep = 0;
+      state.lockedPiece = null;
+      console.log(`[SERVER] Player ${playerNum} requested wall phase. Phase set to 'wall', wallMode set to true.`);
+    } else {
+      console.log(`[SERVER] REJECTED: requestWallPhase not allowed. phase: ${state.phase}, moveStep: ${state.moveStep}, currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx}`);
+    }
+    return;
+  }
   if (action.type === 'placePiece') {
     console.log(`[SERVER] handleIntent: Player ${playerNum} attempting to place piece at (${action.row},${action.col}) in phase '${state.phase}' (currentPlayer: ${state.currentPlayer}, playerIdx: ${playerIdx})`);
     if (state.currentPlayer !== playerIdx) {
