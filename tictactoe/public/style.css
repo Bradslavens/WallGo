@@ -1,0 +1,5 @@
+body { font-family: sans-serif; text-align: center; }
+#board { display: grid; grid-template-columns: repeat(3, 60px); grid-gap: 5px; justify-content: center; margin: 20px auto; }
+.cell { width: 60px; height: 60px; font-size: 2em; display: flex; align-items: center; justify-content: center; background: #eee; cursor: pointer; }
+.cell.taken { cursor: not-allowed; background: #ccc; }
+#status { margin: 10px; font-weight: bold; }
