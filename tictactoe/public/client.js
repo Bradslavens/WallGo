@@ -5,9 +5,20 @@ let gameId = null;
 let phase = 1;
 let placements = { X: 0, O: 0 };
 let maxPieces = 2;
+let selectedPiece = null;
 
 const statusDiv = document.getElementById('status');
 const boardDiv = document.getElementById('board');
+
+function isAdjacent(from, to) {
+  // Only up/down/left/right, not diagonal
+  const fromRow = Math.floor(from / 3), fromCol = from % 3;
+  const toRow = Math.floor(to / 3), toCol = to % 3;
+  return (
+    (fromRow === toRow && Math.abs(fromCol - toCol) === 1) ||
+    (fromCol === toCol && Math.abs(fromRow - toRow) === 1)
+  );
+}
 
 function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 }, maxPiecesArg = 2) {
   phase = phaseArg;
@@ -22,15 +33,43 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
       d.textContent = board[cellIdx] || '';
       d.style.gridColumn = 1 + col * 2;
       d.style.gridRow = 1 + row * 2;
-      d.onclick = () => {
-        // Only allow placement if player has less than maxPieces on the board
-        const playerPieces = board.filter(cell => cell === symbol).length;
-        if (myTurn && !board[cellIdx] && phase === 1 && playerPieces < maxPieces) {
-          socket.emit('makeMove', { gameId, index: cellIdx });
-        } else if (myTurn && !board[cellIdx] && phase === 2) {
-          socket.emit('makeMove', { gameId, index: cellIdx });
+      if (phase === 2) {
+        if (selectedPiece === cellIdx) d.style.background = '#b3e5fc';
+        if (board[cellIdx] === symbol) {
+          d.style.cursor = 'pointer'; // Show hand cursor for own pieces
         }
-      };
+        d.onclick = () => {
+          if (!myTurn) return;
+          if (selectedPiece === null) {
+            // Select a piece to move
+            if (board[cellIdx] === symbol) {
+              selectedPiece = cellIdx;
+              render(board, walls, phase, placements, maxPieces);
+            }
+          } else {
+            // Try to move to this cell
+            if (!board[cellIdx] && isAdjacent(selectedPiece, cellIdx)) {
+              socket.emit('movePiece', { gameId, from: selectedPiece, to: cellIdx });
+              selectedPiece = null;
+            } else if (board[cellIdx] === symbol) {
+              // Select a different own piece
+              selectedPiece = cellIdx;
+              render(board, walls, phase, placements, maxPieces);
+            } else {
+              // Clicked invalid cell, deselect
+              selectedPiece = null;
+              render(board, walls, phase, placements, maxPieces);
+            }
+          }
+        };
+      } else if (phase === 1) {
+        d.onclick = () => {
+          const playerPieces = board.filter(cell => cell === symbol).length;
+          if (myTurn && !board[cellIdx] && playerPieces < maxPieces) {
+            socket.emit('makeMove', { gameId, index: cellIdx });
+          }
+        };
+      }
       boardDiv.appendChild(d);
       if (col < 2) {
         const wallId = `v-${row}-${col}`;

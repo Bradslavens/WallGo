@@ -96,6 +96,34 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('movePiece', ({ gameId, from, to }) => {
+    const game = games[gameId];
+    if (!game) return;
+    if (game.phase !== 2) return;
+    const symbol = game.players.X.id === socket.id ? 'X' : 'O';
+    // Only allow moving own piece
+    if (game.turn !== symbol) return;
+    if (game.board[from] !== symbol) return;
+    if (game.board[to]) return;
+    // Only allow up/down/left/right
+    const fromRow = Math.floor(from / 3), fromCol = from % 3;
+    const toRow = Math.floor(to / 3), toCol = to % 3;
+    if (!((fromRow === toRow && Math.abs(fromCol - toCol) === 1) || (fromCol === toCol && Math.abs(fromRow - toRow) === 1))) return;
+    // Move piece
+    game.board[from] = null;
+    game.board[to] = symbol;
+    game.turn = symbol === 'X' ? 'O' : 'X';
+    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
+    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
+    // Check for win or draw
+    const winner = checkWinner(game.board);
+    if (winner || !game.board.includes(null)) {
+      io.to(game.players.X.id).emit('gameOver', winner);
+      io.to(game.players.O.id).emit('gameOver', winner);
+      delete games[gameId];
+    }
+  });
+
   socket.on('toggleWall', ({ gameId, wallId }) => {
     const game = games[gameId];
     if (!game) return;
