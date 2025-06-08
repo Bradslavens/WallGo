@@ -73,6 +73,10 @@ io.on('connection', (socket) => {
       const oCount = game.board.filter(cell => cell === 'O').length;
       if (xCount === game.maxPieces && oCount === game.maxPieces) {
         game.phase = 2;
+        game.turn = 'X'; // X starts first in phase 2
+        // Notify players about phase transition
+        game.players.X.emit('startTurn');
+        game.players.O.emit('endTurn');
       }
       game.turn = symbol === 'X' ? 'O' : 'X';
       io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: xCount, O: oCount }, maxPieces: game.maxPieces });
@@ -112,7 +116,7 @@ io.on('connection', (socket) => {
     // Move piece
     game.board[from] = null;
     game.board[to] = symbol;
-    game.turn = symbol === 'X' ? 'O' : 'X';
+    // Don't switch turns here - let the client manage the 2-move system
     io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
     io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
     // Check for win or draw
@@ -122,6 +126,23 @@ io.on('connection', (socket) => {
       io.to(game.players.O.id).emit('gameOver', winner);
       delete games[gameId];
     }
+  });
+
+  socket.on('endTurn', ({ gameId }) => {
+    const game = games[gameId];
+    if (!game) return;
+    const symbol = game.players.X.id === socket.id ? 'X' : 'O';
+    if (game.turn !== symbol) return;
+    
+    // Switch turns
+    game.turn = symbol === 'X' ? 'O' : 'X';
+    
+    // Notify current player their turn ended
+    socket.emit('endTurn');
+    
+    // Notify other player their turn started
+    const otherPlayer = symbol === 'X' ? game.players.O : game.players.X;
+    otherPlayer.emit('startTurn');
   });
 
   socket.on('toggleWall', ({ gameId, wallId }) => {

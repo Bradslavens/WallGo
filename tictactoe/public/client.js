@@ -6,6 +6,7 @@ let phase = 1;
 let placements = { X: 0, O: 0 };
 let maxPieces = 2;
 let selectedPiece = null;
+let moveCount = 0; // Track the number of moves per turn
 
 const statusDiv = document.getElementById('status');
 const boardDiv = document.getElementById('board');
@@ -40,6 +41,12 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
         }
         d.onclick = () => {
           if (!myTurn) return;
+          if (moveCount >= 2) {
+            statusDiv.textContent = 'You have used your 2 moves. End your turn.';
+            socket.emit('endTurn', { gameId }); // End the turn after 2 moves
+            return;
+          }
+
           if (selectedPiece === null) {
             // Select a piece to move
             if (board[cellIdx] === symbol) {
@@ -50,7 +57,12 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
             // Try to move to this cell
             if (!board[cellIdx] && isAdjacent(selectedPiece, cellIdx)) {
               socket.emit('movePiece', { gameId, from: selectedPiece, to: cellIdx });
-              selectedPiece = null;
+              selectedPiece = cellIdx; // Allow moving the same piece again
+              moveCount++;
+              if (moveCount >= 2) {
+                statusDiv.textContent = 'You have used your 2 moves. End your turn.';
+                socket.emit('endTurn', { gameId }); // End the turn after 2 moves
+              }
             } else if (board[cellIdx] === symbol) {
               // Select a different own piece
               selectedPiece = cellIdx;
@@ -120,7 +132,8 @@ socket.on('gameStart', (data) => {
   phase = data.phase || 1;
   placements = data.placements || { X: 0, O: 0 };
   maxPieces = data.maxPieces || 2;
-  myTurn = symbol === 'X';
+  myTurn = symbol === 'X'; // X always starts first
+  moveCount = 0; // Reset move count at game start
   statusDiv.textContent = 'Game started! You are ' + symbol + (myTurn ? ' (your turn)' : '');
   render(Array(9).fill(null), {}, phase, placements, maxPieces);
 });
@@ -135,8 +148,12 @@ socket.on('update', (data) => {
     myTurn = (symbol === 'X' && board.filter(Boolean).length % 2 === 0) || (symbol === 'O' && board.filter(Boolean).length % 2 === 1);
     statusDiv.textContent = myTurn ? `Your turn to place a piece (${placements[symbol]}/${maxPieces})` : `Opponent's turn to place a piece (${placements[symbol === 'X' ? 'O' : 'X']}/${maxPieces})`;
   } else if (phase === 2) {
-    myTurn = (symbol === 'X' && board.filter(Boolean).length % 2 === 0) || (symbol === 'O' && board.filter(Boolean).length % 2 === 1);
-    statusDiv.textContent = myTurn ? 'Your turn' : 'Opponent\'s turn';
+    // Don't change myTurn here - let endTurn/startTurn events handle it
+    if (myTurn) {
+      statusDiv.textContent = `Your turn (${moveCount}/2 moves used)`;
+    } else {
+      statusDiv.textContent = 'Opponent\'s turn';
+    }
   } else if (phase === 3) {
     statusDiv.textContent = myTurn ? 'Your turn to place a wall' : 'Opponent\'s turn to place a wall';
   }
@@ -154,4 +171,18 @@ socket.on('gameOver', (winner) => {
 socket.on('opponentLeft', () => {
   statusDiv.textContent = 'Opponent left. Refresh to play again.';
   myTurn = false;
+});
+
+socket.on('endTurn', () => {
+  moveCount = 0;
+  myTurn = false;
+  selectedPiece = null; // Clear any selected piece when turn ends
+  statusDiv.textContent = 'Waiting for opponent...';
+});
+
+socket.on('startTurn', () => {
+  moveCount = 0; // Reset move count when turn starts
+  myTurn = true;
+  selectedPiece = null; // Clear any selected piece when turn starts
+  statusDiv.textContent = phase === 2 ? 'Your turn (0/2 moves used)' : 'Your turn!';
 });
