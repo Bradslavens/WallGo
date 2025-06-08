@@ -113,6 +113,8 @@ io.on('connection', (socket) => {
     const fromRow = Math.floor(from / 3), fromCol = from % 3;
     const toRow = Math.floor(to / 3), toCol = to % 3;
     if (!((fromRow === toRow && Math.abs(fromCol - toCol) === 1) || (fromCol === toCol && Math.abs(fromRow - toRow) === 1))) return;
+    // Check if walls block the movement
+    if (isWallBlocking(from, to, game.walls)) return;
     // Move piece
     game.board[from] = null;
     game.board[to] = symbol;
@@ -219,6 +221,39 @@ function checkWinner(board) {
     }
   }
   return null;
+}
+
+function isWallBlocking(from, to, walls) {
+  const fromRow = Math.floor(from / 3), fromCol = from % 3;
+  const toRow = Math.floor(to / 3), toCol = to % 3;
+  
+  // Moving horizontally (left/right)
+  if (fromRow === toRow) {
+    if (fromCol < toCol) {
+      // Moving right - check vertical wall to the right of 'from'
+      const wallId = `v-${fromRow}-${fromCol}`;
+      return walls[wallId];
+    } else {
+      // Moving left - check vertical wall to the right of 'to'
+      const wallId = `v-${toRow}-${toCol}`;
+      return walls[wallId];
+    }
+  }
+  
+  // Moving vertically (up/down)
+  if (fromCol === toCol) {
+    if (fromRow < toRow) {
+      // Moving down - check horizontal wall below 'from'
+      const wallId = `h-${fromRow}-${fromCol}`;
+      return walls[wallId];
+    } else {
+      // Moving up - check horizontal wall below 'to'
+      const wallId = `h-${toRow}-${toCol}`;
+      return walls[wallId];
+    }
+  }
+  
+  return false;
 }
 
 const PORT = process.env.PORT || 3000;

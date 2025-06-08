@@ -23,6 +23,39 @@ function isAdjacent(from, to) {
   );
 }
 
+function isWallBlocking(from, to, walls) {
+  const fromRow = Math.floor(from / 3), fromCol = from % 3;
+  const toRow = Math.floor(to / 3), toCol = to % 3;
+  
+  // Moving horizontally (left/right)
+  if (fromRow === toRow) {
+    if (fromCol < toCol) {
+      // Moving right - check vertical wall to the right of 'from'
+      const wallId = `v-${fromRow}-${fromCol}`;
+      return walls[wallId];
+    } else {
+      // Moving left - check vertical wall to the right of 'to'
+      const wallId = `v-${toRow}-${toCol}`;
+      return walls[wallId];
+    }
+  }
+  
+  // Moving vertically (up/down)
+  if (fromCol === toCol) {
+    if (fromRow < toRow) {
+      // Moving down - check horizontal wall below 'from'
+      const wallId = `h-${fromRow}-${fromCol}`;
+      return walls[wallId];
+    } else {
+      // Moving up - check horizontal wall below 'to'
+      const wallId = `h-${toRow}-${toCol}`;
+      return walls[wallId];
+    }
+  }
+  
+  return false;
+}
+
 function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 }, maxPiecesArg = 2) {
   phase = phaseArg;
   placements = placementsArg;
@@ -56,7 +89,7 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
             }
           } else {
             // Try to move to this cell
-            if (!board[cellIdx] && isAdjacent(selectedPiece, cellIdx)) {
+            if (!board[cellIdx] && isAdjacent(selectedPiece, cellIdx) && !isWallBlocking(selectedPiece, cellIdx, walls)) {
               socket.emit('movePiece', { gameId, from: selectedPiece, to: cellIdx });
               lastMovedTo = cellIdx; // Track the last cell moved to
               selectedPiece = cellIdx; // Allow moving the same piece again
