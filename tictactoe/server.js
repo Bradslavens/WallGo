@@ -13,13 +13,13 @@ let games = {};
 
 function getEmptyWalls() {
   const walls = {};
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 2; col++) {
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 6; col++) {
       walls[`v-${row}-${col}`] = false;
     }
   }
-  for (let row = 0; row < 2; row++) {
-    for (let col = 0; col < 3; col++) {
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 7; col++) {
       walls[`h-${row}-${col}`] = false;
     }
   }
@@ -27,7 +27,7 @@ function getEmptyWalls() {
 }
 
 function getEmptyBoard() {
-  return Array(9).fill(null);
+  return Array(49).fill(null);
 }
 
 io.on('connection', (socket) => {
@@ -110,8 +110,8 @@ io.on('connection', (socket) => {
     if (game.board[from] !== symbol) return;
     if (game.board[to]) return;
     // Only allow up/down/left/right
-    const fromRow = Math.floor(from / 3), fromCol = from % 3;
-    const toRow = Math.floor(to / 3), toCol = to % 3;
+    const fromRow = Math.floor(from / 7), fromCol = from % 7;
+    const toRow = Math.floor(to / 7), toCol = to % 7;
     if (!((fromRow === toRow && Math.abs(fromCol - toCol) === 1) || (fromCol === toCol && Math.abs(fromRow - toRow) === 1))) return;
     // Check if walls block the movement
     if (isWallBlocking(from, to, game.walls)) return;
@@ -167,8 +167,8 @@ io.on('connection', (socket) => {
     if (typeof cellIdx !== 'number') return;
     // Helper function to check adjacency
     function isWallAdjacentToCell(wallId, cellIdx) {
-      const row = Math.floor(cellIdx / 3);
-      const col = cellIdx % 3;
+      const row = Math.floor(cellIdx / 7);
+      const col = cellIdx % 7;
       if (wallId.startsWith('v-')) {
         const [_, wRow, wCol] = wallId.split('-').map(Number);
         return (wRow === row && (wCol === col || wCol === col - 1));
@@ -197,7 +197,7 @@ io.on('connection', (socket) => {
     
     // Check if the combined area is less than or equal to board size
     // This means walls have created separation and the game should end
-    if (totalArea <= 9) {
+    if (totalArea <= 49) {
       // Game should end
       let winner = null;
       if (areas.X > areas.O) winner = 'X';
@@ -254,7 +254,7 @@ function areAllPiecesEnclosed(board, walls) {
   const xPieces = [];
   const oPieces = [];
   
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 49; i++) {
     if (board[i] === 'X') xPieces.push(i);
     if (board[i] === 'O') oPieces.push(i);
   }
@@ -281,11 +281,11 @@ function isPiecesGroupEnclosed(pieces, board, walls) {
     
     // Check if this region touches the board boundary
     for (const cell of region) {
-      const row = Math.floor(cell / 3);
-      const col = cell % 3;
+      const row = Math.floor(cell / 7);
+      const col = cell % 7;
       
       // Check if on boundary and can escape
-      if (row === 0 || row === 2 || col === 0 || col === 2) {
+      if (row === 0 || row === 6 || col === 0 || col === 6) {
         if (canEscapeBoundary(cell, board, walls)) {
           return false; // Not enclosed - can escape to boundary
         }
@@ -297,23 +297,23 @@ function isPiecesGroupEnclosed(pieces, board, walls) {
 }
 
 function canEscapeBoundary(cell, board, walls) {
-  const row = Math.floor(cell / 3);
-  const col = cell % 3;
+  const row = Math.floor(cell / 7);
+  const col = cell % 7;
   
   // Check each direction from the boundary cell
   const directions = [
-    { dr: -1, dc: 0, wallCheck: () => row > 0 ? !isWallBlocking(cell, (row-1)*3 + col, walls) : !walls[`h-${row-1}-${col}`] },
-    { dr: 1, dc: 0, wallCheck: () => row < 2 ? !isWallBlocking(cell, (row+1)*3 + col, walls) : !walls[`h-${row}-${col}`] },
-    { dr: 0, dc: -1, wallCheck: () => col > 0 ? !isWallBlocking(cell, row*3 + (col-1), walls) : !walls[`v-${row}-${col-1}`] },
-    { dr: 0, dc: 1, wallCheck: () => col < 2 ? !isWallBlocking(cell, row*3 + (col+1), walls) : !walls[`v-${row}-${col}`] }
+    { dr: -1, dc: 0, wallCheck: () => row > 0 ? !isWallBlocking(cell, (row-1)*7 + col, walls) : !walls[`h-${row-1}-${col}`] },
+    { dr: 1, dc: 0, wallCheck: () => row < 6 ? !isWallBlocking(cell, (row+1)*7 + col, walls) : !walls[`h-${row}-${col}`] },
+    { dr: 0, dc: -1, wallCheck: () => col > 0 ? !isWallBlocking(cell, row*7 + (col-1), walls) : !walls[`v-${row}-${col-1}`] },
+    { dr: 0, dc: 1, wallCheck: () => col < 6 ? !isWallBlocking(cell, row*7 + (col+1), walls) : !walls[`v-${row}-${col}`] }
   ];
   
   for (const { dr, dc, wallCheck } of directions) {
     const newRow = row + dr;
     const newCol = col + dc;
     
-    // If moving outside the 3x3 grid and no wall blocks it, this is an "escape"
-    if (newRow < 0 || newRow >= 3 || newCol < 0 || newCol >= 3) {
+    // If moving outside the 7x7 grid and no wall blocks it, this is an "escape"
+    if (newRow < 0 || newRow >= 7 || newCol < 0 || newCol >= 7) {
       if (wallCheck()) {
         return true; // Can escape - no wall blocking exit from board
       }
@@ -336,8 +336,8 @@ function floodFillRegion(startCell, board, walls, globalVisited) {
     globalVisited.add(cell);
     region.add(cell);
     
-    const row = Math.floor(cell / 3);
-    const col = cell % 3;
+    const row = Math.floor(cell / 7);
+    const col = cell % 7;
     
     // Check all 4 directions
     const neighbors = [
@@ -348,8 +348,8 @@ function floodFillRegion(startCell, board, walls, globalVisited) {
     ];
     
     for (const { newRow, newCol } of neighbors) {
-      if (newRow >= 0 && newRow < 3 && newCol >= 0 && newCol < 3) {
-        const neighborCell = newRow * 3 + newCol;
+      if (newRow >= 0 && newRow < 7 && newCol >= 0 && newCol < 7) {
+        const neighborCell = newRow * 7 + newCol;
         
         // Only include if not blocked by wall and not already visited
         if (!visited.has(neighborCell) && !isWallBlocking(cell, neighborCell, walls)) {
@@ -368,7 +368,7 @@ function calculatePlayerAreas(board, walls) {
   // Get piece positions for each player
   const xPieces = [];
   const oPieces = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 49; i++) {
     if (board[i] === 'X') xPieces.push(i);
     if (board[i] === 'O') oPieces.push(i);
   }
@@ -414,21 +414,21 @@ function checkAreaBasedWinner(board, walls) {
   const globalVisited = new Set();
   
   // Start flood fill from each piece and empty cell to find total connected area
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 49; i++) {
     if (!globalVisited.has(i)) {
       floodFillRegion(i, board, walls, globalVisited);
     }
   }
   
-  console.log(`Total reachable cells: ${globalVisited.size} out of 9`);
+  console.log(`Total reachable cells: ${globalVisited.size} out of 49`);
   console.log(`Reachable cells:`, Array.from(globalVisited));
   
-  // If we can't reach all 9 cells, the game is enclosed and should end
-  if (globalVisited.size < 9) {
+  // If we can't reach all 49 cells, the game is enclosed and should end
+  if (globalVisited.size < 49) {
     // Calculate areas for each player
     const areas = calculatePlayerAreas(board, walls);
     
-    console.log(`Game enclosed! Total reachable: ${globalVisited.size}/9. Areas - X: ${areas.X}, O: ${areas.O}`);
+    console.log(`Game enclosed! Total reachable: ${globalVisited.size}/49. Areas - X: ${areas.X}, O: ${areas.O}`);
     
     if (areas.X > areas.O) {
       return 'X';
@@ -443,8 +443,8 @@ function checkAreaBasedWinner(board, walls) {
 }
 
 function isWallBlocking(from, to, walls) {
-  const fromRow = Math.floor(from / 3), fromCol = from % 3;
-  const toRow = Math.floor(to / 3), toCol = to % 3;
+  const fromRow = Math.floor(from / 7), fromCol = from % 7;
+  const toRow = Math.floor(to / 7), toCol = to % 7;
   
   // Moving horizontally (left/right)
   if (fromRow === toRow) {

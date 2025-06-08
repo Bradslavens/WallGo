@@ -15,8 +15,8 @@ const boardDiv = document.getElementById('board');
 
 function isAdjacent(from, to) {
   // Only up/down/left/right, not diagonal
-  const fromRow = Math.floor(from / 3), fromCol = from % 3;
-  const toRow = Math.floor(to / 3), toCol = to % 3;
+  const fromRow = Math.floor(from / 7), fromCol = from % 7;
+  const toRow = Math.floor(to / 7), toCol = to % 7;
   return (
     (fromRow === toRow && Math.abs(fromCol - toCol) === 1) ||
     (fromCol === toCol && Math.abs(fromRow - toRow) === 1)
@@ -24,8 +24,8 @@ function isAdjacent(from, to) {
 }
 
 function isWallBlocking(from, to, walls) {
-  const fromRow = Math.floor(from / 3), fromCol = from % 3;
-  const toRow = Math.floor(to / 3), toCol = to % 3;
+  const fromRow = Math.floor(from / 7), fromCol = from % 7;
+  const toRow = Math.floor(to / 7), toCol = to % 7;
   
   // Moving horizontally (left/right)
   if (fromRow === toRow) {
@@ -61,9 +61,9 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
   placements = placementsArg;
   maxPieces = maxPiecesArg;
   boardDiv.innerHTML = '';
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const cellIdx = row * 3 + col;
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < 7; col++) {
+      const cellIdx = row * 7 + col;
       const d = document.createElement('div');
       d.className = 'cell' + (board[cellIdx] ? ' taken' : '');
       d.textContent = board[cellIdx] || '';
@@ -118,7 +118,7 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
         };
       }
       boardDiv.appendChild(d);
-      if (col < 2) {
+      if (col < 6) {
         const wallId = `v-${row}-${col}`;
         const wall = document.createElement('div');
         wall.className = 'wall';
@@ -136,8 +136,8 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
         boardDiv.appendChild(wall);
       }
     }
-    if (row < 2) {
-      for (let col = 0; col < 3; col++) {
+    if (row < 6) {
+      for (let col = 0; col < 7; col++) {
         const wallId = `h-${row}-${col}`;
         const wall = document.createElement('div');
         wall.className = 'wall horizontal';
@@ -153,7 +153,7 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
           }
         };
         boardDiv.appendChild(wall);
-        if (col < 2) {
+        if (col < 6) {
           const inter = document.createElement('div');
           inter.style.gridColumn = 2 + col * 2;
           inter.style.gridRow = 2 + row * 2;
@@ -169,8 +169,8 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
 
 // Helper to check if a wall is adjacent to a cell
 function isWallAdjacentToCell(wallId, cellIdx) {
-  const row = Math.floor(cellIdx / 3);
-  const col = cellIdx % 3;
+  const row = Math.floor(cellIdx / 7);
+  const col = cellIdx % 7;
   if (wallId.startsWith('v-')) {
     const [_, wRow, wCol] = wallId.split('-').map(Number);
     return (wRow === row && (wCol === col || wCol === col - 1));
@@ -194,7 +194,7 @@ socket.on('gameStart', (data) => {
   myTurn = symbol === 'X'; // X always starts first
   moveCount = 0; // Reset move count at game start
   statusDiv.textContent = 'Game started! You are ' + symbol + (myTurn ? ' (your turn)' : '');
-  render(Array(9).fill(null), {}, phase, placements, maxPieces);
+  render(Array(49).fill(null), {}, phase, placements, maxPieces);
 });
 
 socket.on('update', (data) => {

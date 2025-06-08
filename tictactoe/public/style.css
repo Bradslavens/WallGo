@@ -1,7 +1,24 @@
 body { font-family: sans-serif; text-align: center; }
 #board-container { display: inline-block; position: relative; }
-#board { display: grid; grid-template-columns: repeat(3, 60px 12px) 60px; grid-template-rows: repeat(3, 60px 12px) 60px; grid-gap: 0; justify-content: center; margin: 20px auto; }
-.cell { width: 60px; height: 60px; font-size: 2em; display: flex; align-items: center; justify-content: center; background: #eee; cursor: pointer; box-sizing: border-box; }
+#board {
+  display: grid;
+  grid-template-columns: repeat(7, 60px 12px) 60px;
+  grid-template-rows: repeat(7, 60px 12px) 60px;
+  grid-gap: 0;
+  justify-content: center;
+  margin: 20px auto;
+}
+.cell {
+  width: 60px;
+  height: 60px;
+  font-size: 2em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eee;
+  cursor: pointer;
+  box-sizing: border-box;
+}
 .cell.taken { cursor: not-allowed; background: #ccc; }
 .wall {
   width: 12px;
@@ -14,5 +31,8 @@ body { font-family: sans-serif; text-align: center; }
   justify-content: center;
 }
 .wall.active { background: #444; }
-.wall.horizontal { width: 60px; height: 12px; }
+.wall.horizontal {
+  width: 60px;
+  height: 12px;
+}
 #status { margin: 10px; font-weight: bold; }
