@@ -26,18 +26,28 @@ function getEmptyWalls() {
   return walls;
 }
 
+function getEmptyBoard() {
+  return Array(9).fill(null);
+}
+
 io.on('connection', (socket) => {
   if (waitingPlayer) {
     // Start a new game
     const gameId = socket.id + '#' + waitingPlayer.id;
+    // Randomly choose who is X and O
+    const isX = Math.random() < 0.5;
+    const playerX = isX ? waitingPlayer : socket;
+    const playerO = isX ? socket : waitingPlayer;
     games[gameId] = {
-      board: Array(9).fill(null),
+      board: getEmptyBoard(),
       turn: 'X',
-      players: { X: waitingPlayer, O: socket },
+      players: { X: playerX, O: playerO },
       walls: getEmptyWalls(),
+      phase: 1, // 1 = placement, 2 = play, 3 = wall
+      placements: 0, // count of pieces placed
     };
-    waitingPlayer.emit('gameStart', { symbol: 'X', gameId });
-    socket.emit('gameStart', { symbol: 'O', gameId });
+    playerX.emit('gameStart', { symbol: 'X', gameId, phase: 1 });
+    playerO.emit('gameStart', { symbol: 'O', gameId, phase: 1 });
     waitingPlayer = null;
   } else {
     waitingPlayer = socket;
@@ -48,27 +58,45 @@ io.on('connection', (socket) => {
     const game = games[gameId];
     if (!game) return;
     const symbol = game.players.X.id === socket.id ? 'X' : 'O';
-    if (game.turn !== symbol || game.board[index]) return;
-    game.board[index] = symbol;
-    game.turn = symbol === 'X' ? 'O' : 'X';
-    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls });
-    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls });
-    // Check for win or draw
-    const winner = checkWinner(game.board);
-    if (winner || !game.board.includes(null)) {
-      io.to(game.players.X.id).emit('gameOver', winner);
-      io.to(game.players.O.id).emit('gameOver', winner);
-      delete games[gameId];
+    if (game.phase === 1) {
+      // Placement phase: only allow placing on empty squares, alternate turns
+      if (game.turn !== symbol || game.board[index]) return;
+      game.board[index] = symbol;
+      game.placements++;
+      // After 6 placements (3 per player), move to phase 2
+      if (game.placements >= 6) {
+        game.phase = 2;
+      }
+      game.turn = symbol === 'X' ? 'O' : 'X';
+      io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+      io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+      return;
+    }
+    if (game.phase === 2) {
+      // Normal moves
+      if (game.turn !== symbol || game.board[index]) return;
+      game.board[index] = symbol;
+      game.turn = symbol === 'X' ? 'O' : 'X';
+      io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+      io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+      // Check for win or draw
+      const winner = checkWinner(game.board);
+      if (winner || !game.board.includes(null)) {
+        io.to(game.players.X.id).emit('gameOver', winner);
+        io.to(game.players.O.id).emit('gameOver', winner);
+        delete games[gameId];
+      }
     }
   });
 
   socket.on('toggleWall', ({ gameId, wallId }) => {
     const game = games[gameId];
     if (!game) return;
-    // Toggle wall
+    // Walls can only be placed in phase 3
+    if (game.phase !== 3) return;
     game.walls[wallId] = !game.walls[wallId];
-    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls });
-    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls });
+    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
   });
 
   socket.on('disconnect', () => {

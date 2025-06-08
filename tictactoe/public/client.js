@@ -2,16 +2,16 @@ const socket = io();
 let symbol = null;
 let myTurn = false;
 let gameId = null;
+let phase = 1;
 
 const statusDiv = document.getElementById('status');
 const boardDiv = document.getElementById('board');
 
-function render(board, walls = {}) {
+function render(board, walls = {}, phaseArg = 1) {
+  phase = phaseArg;
   boardDiv.innerHTML = '';
-  // 3x3 board, so 4x4 grid for cells and wall spaces
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
-      // Cell
       const cellIdx = row * 3 + col;
       const d = document.createElement('div');
       d.className = 'cell' + (board[cellIdx] ? ' taken' : '');
@@ -19,12 +19,13 @@ function render(board, walls = {}) {
       d.style.gridColumn = 1 + col * 2;
       d.style.gridRow = 1 + row * 2;
       d.onclick = () => {
-        if (myTurn && !board[cellIdx]) {
+        if (myTurn && !board[cellIdx] && phase === 1) {
+          socket.emit('makeMove', { gameId, index: cellIdx });
+        } else if (myTurn && !board[cellIdx] && phase === 2) {
           socket.emit('makeMove', { gameId, index: cellIdx });
         }
       };
       boardDiv.appendChild(d);
-      // Vertical wall (except after last col)
       if (col < 2) {
         const wallId = `v-${row}-${col}`;
         const wall = document.createElement('div');
@@ -33,12 +34,11 @@ function render(board, walls = {}) {
         wall.style.gridColumn = 2 + col * 2;
         wall.style.gridRow = 1 + row * 2;
         wall.onclick = () => {
-          socket.emit('toggleWall', { gameId, wallId });
+          if (phase === 3) socket.emit('toggleWall', { gameId, wallId });
         };
         boardDiv.appendChild(wall);
       }
     }
-    // Horizontal walls (except after last row)
     if (row < 2) {
       for (let col = 0; col < 3; col++) {
         const wallId = `h-${row}-${col}`;
@@ -48,10 +48,9 @@ function render(board, walls = {}) {
         wall.style.gridColumn = 1 + col * 2;
         wall.style.gridRow = 2 + row * 2;
         wall.onclick = () => {
-          socket.emit('toggleWall', { gameId, wallId });
+          if (phase === 3) socket.emit('toggleWall', { gameId, wallId });
         };
         boardDiv.appendChild(wall);
-        // Add vertical wall at intersection (optional, for aesthetics)
         if (col < 2) {
           const inter = document.createElement('div');
           inter.style.gridColumn = 2 + col * 2;
@@ -73,17 +72,25 @@ socket.on('waiting', () => {
 socket.on('gameStart', (data) => {
   symbol = data.symbol;
   gameId = data.gameId;
+  phase = data.phase || 1;
   myTurn = symbol === 'X';
   statusDiv.textContent = 'Game started! You are ' + symbol + (myTurn ? ' (your turn)' : '');
-  render(Array(9).fill(null), {});
+  render(Array(9).fill(null), {}, phase);
 });
 
 socket.on('update', (data) => {
-  // data: { board, walls }
-  render(data.board, data.walls || {});
+  render(data.board, data.walls || {}, data.phase || 1);
   const board = data.board;
-  myTurn = (symbol === 'X' && board.filter(Boolean).length % 2 === 0) || (symbol === 'O' && board.filter(Boolean).length % 2 === 1);
-  statusDiv.textContent = myTurn ? 'Your turn' : 'Opponent\'s turn';
+  phase = data.phase || 1;
+  if (phase === 1) {
+    myTurn = (symbol === 'X' && board.filter(Boolean).length % 2 === 0) || (symbol === 'O' && board.filter(Boolean).length % 2 === 1);
+    statusDiv.textContent = myTurn ? 'Your turn to place a piece' : 'Opponent\'s turn to place a piece';
+  } else if (phase === 2) {
+    myTurn = (symbol === 'X' && board.filter(Boolean).length % 2 === 0) || (symbol === 'O' && board.filter(Boolean).length % 2 === 1);
+    statusDiv.textContent = myTurn ? 'Your turn' : 'Opponent\'s turn';
+  } else if (phase === 3) {
+    statusDiv.textContent = myTurn ? 'Your turn to place a wall' : 'Opponent\'s turn to place a wall';
+  }
 });
 
 socket.on('gameOver', (winner) => {
