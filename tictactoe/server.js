@@ -43,8 +43,9 @@ io.on('connection', (socket) => {
       turn: 'X',
       players: { X: playerX, O: playerO },
       walls: getEmptyWalls(),
-      phase: 1, // 1 = placement, 2 = play, 3 = wall
-      placements: 0, // count of pieces placed
+      phase: 1, // 1 = placement, 2 = move, 3 = wall
+      placements: { X: 0, O: 0 }, // track pieces placed per player
+      maxPieces: 2,
     };
     playerX.emit('gameStart', { symbol: 'X', gameId, phase: 1 });
     playerO.emit('gameStart', { symbol: 'O', gameId, phase: 1 });
@@ -59,17 +60,23 @@ io.on('connection', (socket) => {
     if (!game) return;
     const symbol = game.players.X.id === socket.id ? 'X' : 'O';
     if (game.phase === 1) {
-      // Placement phase: only allow placing on empty squares, alternate turns
+      // Placement phase: only allow placing on empty squares, alternate turns, max 2 pieces per player
       if (game.turn !== symbol || game.board[index]) return;
+      // Count how many pieces this player has on the board
+      const playerPieces = game.board.filter(cell => cell === symbol).length;
+      if (playerPieces >= game.maxPieces) return;
       game.board[index] = symbol;
-      game.placements++;
-      // After 6 placements (3 per player), move to phase 2
-      if (game.placements >= 6) {
+      // Recount after placement
+      const newPlayerPieces = game.board.filter(cell => cell === symbol).length;
+      // If both players have placed all their pieces, move to phase 2
+      const xCount = game.board.filter(cell => cell === 'X').length;
+      const oCount = game.board.filter(cell => cell === 'O').length;
+      if (xCount === game.maxPieces && oCount === game.maxPieces) {
         game.phase = 2;
       }
       game.turn = symbol === 'X' ? 'O' : 'X';
-      io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
-      io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
+      io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: xCount, O: oCount }, maxPieces: game.maxPieces });
+      io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: xCount, O: oCount }, maxPieces: game.maxPieces });
       return;
     }
     if (game.phase === 2) {
