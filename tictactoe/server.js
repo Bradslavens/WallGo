@@ -11,6 +11,21 @@ app.use(express.static(__dirname + '/public'));
 let waitingPlayer = null;
 let games = {};
 
+function getEmptyWalls() {
+  const walls = {};
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 2; col++) {
+      walls[`v-${row}-${col}`] = false;
+    }
+  }
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      walls[`h-${row}-${col}`] = false;
+    }
+  }
+  return walls;
+}
+
 io.on('connection', (socket) => {
   if (waitingPlayer) {
     // Start a new game
@@ -19,6 +34,7 @@ io.on('connection', (socket) => {
       board: Array(9).fill(null),
       turn: 'X',
       players: { X: waitingPlayer, O: socket },
+      walls: getEmptyWalls(),
     };
     waitingPlayer.emit('gameStart', { symbol: 'X', gameId });
     socket.emit('gameStart', { symbol: 'O', gameId });
@@ -35,8 +51,8 @@ io.on('connection', (socket) => {
     if (game.turn !== symbol || game.board[index]) return;
     game.board[index] = symbol;
     game.turn = symbol === 'X' ? 'O' : 'X';
-    io.to(game.players.X.id).emit('update', game.board);
-    io.to(game.players.O.id).emit('update', game.board);
+    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls });
+    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls });
     // Check for win or draw
     const winner = checkWinner(game.board);
     if (winner || !game.board.includes(null)) {
@@ -44,6 +60,15 @@ io.on('connection', (socket) => {
       io.to(game.players.O.id).emit('gameOver', winner);
       delete games[gameId];
     }
+  });
+
+  socket.on('toggleWall', ({ gameId, wallId }) => {
+    const game = games[gameId];
+    if (!game) return;
+    // Toggle wall
+    game.walls[wallId] = !game.walls[wallId];
+    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls });
+    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls });
   });
 
   socket.on('disconnect', () => {
