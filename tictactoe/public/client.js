@@ -225,8 +225,10 @@ socket.on('update', (data) => {
 });
 
 socket.on('gameOver', (winner) => {
-  if (winner) {
-    statusDiv.textContent = winner === symbol ? 'You win!' : 'You lose!';
+  if (winner === 'draw') {
+    statusDiv.textContent = 'Draw! Both players have equal enclosed areas.';
+  } else if (winner) {
+    statusDiv.textContent = winner === symbol ? 'You win! Your pieces have the larger enclosed area!' : 'You lose! Opponent\'s pieces have the larger enclosed area.';
   } else {
     statusDiv.textContent = 'Draw!';
   }
