@@ -155,6 +155,35 @@ io.on('connection', (socket) => {
     io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase });
   });
 
+  socket.on('placeWall', ({ gameId, wallId, cellIdx }) => {
+    const game = games[gameId];
+    if (!game) return;
+    if (game.phase !== 2) return;
+    const symbol = game.players.X.id === socket.id ? 'X' : 'O';
+    if (game.turn !== symbol) return;
+    // Validate wall is adjacent to the last moved-to cell
+    if (typeof cellIdx !== 'number') return;
+    // Helper function to check adjacency
+    function isWallAdjacentToCell(wallId, cellIdx) {
+      const row = Math.floor(cellIdx / 3);
+      const col = cellIdx % 3;
+      if (wallId.startsWith('v-')) {
+        const [_, wRow, wCol] = wallId.split('-').map(Number);
+        return (wRow === row && (wCol === col || wCol === col - 1));
+      } else if (wallId.startsWith('h-')) {
+        const [_, wRow, wCol] = wallId.split('-').map(Number);
+        return (wCol === col && (wRow === row || wRow === row - 1));
+      }
+      return false;
+    }
+    if (!isWallAdjacentToCell(wallId, cellIdx)) return;
+    // Only allow placing if wall is not already present
+    if (game.walls[wallId]) return;
+    game.walls[wallId] = true;
+    io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
+    io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
+  });
+
   socket.on('disconnect', () => {
     if (waitingPlayer && waitingPlayer.id === socket.id) {
       waitingPlayer = null;

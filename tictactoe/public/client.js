@@ -7,6 +7,8 @@ let placements = { X: 0, O: 0 };
 let maxPieces = 2;
 let selectedPiece = null;
 let moveCount = 0; // Track the number of moves per turn
+let lastMovedTo = null; // Track the last cell a piece was moved to this turn
+let wallPlacedThisTurn = false; // Track if a wall has been placed this turn
 
 const statusDiv = document.getElementById('status');
 const boardDiv = document.getElementById('board');
@@ -57,8 +59,10 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
             // Try to move to this cell
             if (!board[cellIdx] && isAdjacent(selectedPiece, cellIdx)) {
               socket.emit('movePiece', { gameId, from: selectedPiece, to: cellIdx });
+              lastMovedTo = cellIdx; // Track the last cell moved to
               selectedPiece = cellIdx; // Allow moving the same piece again
               moveCount++;
+              wallPlacedThisTurn = false; // Reset wall placement for this move
               if (moveCount >= 2) {
                 statusDiv.textContent = 'You have used your 2 moves. End your turn.';
                 socket.emit('endTurn', { gameId }); // End the turn after 2 moves
@@ -91,7 +95,12 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
         wall.style.gridColumn = 2 + col * 2;
         wall.style.gridRow = 1 + row * 2;
         wall.onclick = () => {
-          if (phase === 3) socket.emit('toggleWall', { gameId, wallId });
+          if (phase === 2 && myTurn && lastMovedTo !== null && !wallPlacedThisTurn && isWallAdjacentToCell(wallId, lastMovedTo)) {
+            socket.emit('placeWall', { gameId, wallId, cellIdx: lastMovedTo });
+            wallPlacedThisTurn = true;
+          } else if (phase === 3) {
+            socket.emit('toggleWall', { gameId, wallId });
+          }
         };
         boardDiv.appendChild(wall);
       }
@@ -105,7 +114,12 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
         wall.style.gridColumn = 1 + col * 2;
         wall.style.gridRow = 2 + row * 2;
         wall.onclick = () => {
-          if (phase === 3) socket.emit('toggleWall', { gameId, wallId });
+          if (phase === 2 && myTurn && lastMovedTo !== null && !wallPlacedThisTurn && isWallAdjacentToCell(wallId, lastMovedTo)) {
+            socket.emit('placeWall', { gameId, wallId, cellIdx: lastMovedTo });
+            wallPlacedThisTurn = true;
+          } else if (phase === 3) {
+            socket.emit('toggleWall', { gameId, wallId });
+          }
         };
         boardDiv.appendChild(wall);
         if (col < 2) {
@@ -120,6 +134,20 @@ function render(board, walls = {}, phaseArg = 1, placementsArg = { X: 0, O: 0 },
       }
     }
   }
+}
+
+// Helper to check if a wall is adjacent to a cell
+function isWallAdjacentToCell(wallId, cellIdx) {
+  const row = Math.floor(cellIdx / 3);
+  const col = cellIdx % 3;
+  if (wallId.startsWith('v-')) {
+    const [_, wRow, wCol] = wallId.split('-').map(Number);
+    return (wRow === row && (wCol === col || wCol === col - 1));
+  } else if (wallId.startsWith('h-')) {
+    const [_, wRow, wCol] = wallId.split('-').map(Number);
+    return (wCol === col && (wRow === row || wRow === row - 1));
+  }
+  return false;
 }
 
 socket.on('waiting', () => {
@@ -150,7 +178,7 @@ socket.on('update', (data) => {
   } else if (phase === 2) {
     // Don't change myTurn here - let endTurn/startTurn events handle it
     if (myTurn) {
-      statusDiv.textContent = `Your turn (${moveCount}/2 moves used)`;
+      statusDiv.textContent = `Your turn (${moveCount}/2 moves used)` + (lastMovedTo !== null && !wallPlacedThisTurn ? ' (You may place a wall)' : '');
     } else {
       statusDiv.textContent = 'Opponent\'s turn';
     }
@@ -177,6 +205,8 @@ socket.on('endTurn', () => {
   moveCount = 0;
   myTurn = false;
   selectedPiece = null; // Clear any selected piece when turn ends
+  lastMovedTo = null;
+  wallPlacedThisTurn = false;
   statusDiv.textContent = 'Waiting for opponent...';
 });
 
@@ -184,5 +214,7 @@ socket.on('startTurn', () => {
   moveCount = 0; // Reset move count when turn starts
   myTurn = true;
   selectedPiece = null; // Clear any selected piece when turn starts
+  lastMovedTo = null;
+  wallPlacedThisTurn = false;
   statusDiv.textContent = phase === 2 ? 'Your turn (0/2 moves used)' : 'Your turn!';
 });
