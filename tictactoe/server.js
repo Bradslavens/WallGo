@@ -195,15 +195,15 @@ io.on('connection', (socket) => {
     const totalArea = areas.X + areas.O;
     console.log(`Areas after wall: X=${areas.X}, O=${areas.O}, total=${totalArea}`);
     
-    // Check if the board is fully partitioned (no neutral areas remain)
-    // This happens when all 9 cells are controlled by players
-    if (totalArea === 9) {
-      // Game should end - board is fully partitioned
+    // Check if the combined area is less than or equal to board size
+    // This means walls have created separation and the game should end
+    if (totalArea <= 9) {
+      // Game should end
       let winner = null;
       if (areas.X > areas.O) winner = 'X';
       else if (areas.O > areas.X) winner = 'O';
       else winner = 'draw';
-      console.log(`Game ending due to full partition. Winner: ${winner}`);
+      console.log(`Game ending due to area constraint. Winner: ${winner}`);
       io.to(game.players.X.id).emit('gameOver', winner);
       io.to(game.players.O.id).emit('gameOver', winner);
       delete games[gameId];
@@ -364,34 +364,49 @@ function floodFillRegion(startCell, board, walls, globalVisited) {
 
 function calculatePlayerAreas(board, walls) {
   const areas = { X: 0, O: 0 };
-  const globalVisited = new Set();
-
-  // For each cell, if it hasn't been visited, flood fill to find the connected region
+  
+  // Get piece positions for each player
+  const xPieces = [];
+  const oPieces = [];
   for (let i = 0; i < 9; i++) {
-    if (!globalVisited.has(i)) {
-      const region = floodFillRegion(i, board, walls, globalVisited);
+    if (board[i] === 'X') xPieces.push(i);
+    if (board[i] === 'O') oPieces.push(i);
+  }
+  
+  // Calculate area for X player
+  if (xPieces.length > 0) {
+    areas.X = calculatePlayerArea(xPieces, board, walls);
+  }
+  
+  // Calculate area for O player  
+  if (oPieces.length > 0) {
+    areas.O = calculatePlayerArea(oPieces, board, walls);
+  }
+  
+  return areas;
+}
 
-      // Count X and O pieces in this region
-      let xCount = 0;
-      let oCount = 0;
-
-      for (const cell of region) {
-        if (board[cell] === 'X') xCount++;
-        if (board[cell] === 'O') oCount++;
-      }
-
-      // Award the entire region to the player with more pieces in it
-      // If tied or no pieces, don't award to anyone
-      if (xCount > oCount) {
-        areas.X += region.size;
-      } else if (oCount > xCount) {
-        areas.O += region.size;
-      }
-      // If xCount === oCount (including both 0), region is neutral
-    }
+function calculatePlayerArea(pieces, board, walls) {
+  if (pieces.length === 0) return 0;
+  if (pieces.length === 1) {
+    // Single piece - just flood fill from it
+    const globalVisited = new Set();
+    const region = floodFillRegion(pieces[0], board, walls, globalVisited);
+    return region.size;
   }
 
-  return areas;
+  // Two pieces - check if they're in the same region
+  const globalVisited = new Set();
+  const region1 = floodFillRegion(pieces[0], board, walls, globalVisited);
+
+  if (globalVisited.has(pieces[1])) {
+    // Both pieces in the same region - area is the size of the region
+    return region1.size;
+  } else {
+    // Pieces in different regions - flood fill second piece and add areas
+    const region2 = floodFillRegion(pieces[1], board, walls, globalVisited);
+    return region1.size + region2.size;
+  }
 }
 
 function checkAreaBasedWinner(board, walls) {
