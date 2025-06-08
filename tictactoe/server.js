@@ -182,6 +182,14 @@ io.on('connection', (socket) => {
     game.walls[wallId] = true;
     io.to(game.players.X.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
     io.to(game.players.O.id).emit('update', { board: game.board, walls: game.walls, phase: game.phase, placements: { X: game.board.filter(c=>c==='X').length, O: game.board.filter(c=>c==='O').length }, maxPieces: game.maxPieces });
+    // End turn after wall placement in phase 2
+    // Switch turns
+    game.turn = symbol === 'X' ? 'O' : 'X';
+    // Notify current player their turn ended
+    socket.emit('endTurn');
+    // Notify other player their turn started
+    const otherPlayer = symbol === 'X' ? game.players.O : game.players.X;
+    otherPlayer.emit('startTurn');
   });
 
   socket.on('disconnect', () => {
